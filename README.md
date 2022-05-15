@@ -1,2 +1,3 @@
 # pyrxbm
-Reading and writing roblox files
+
+Ported to Python from https://github.com/MaximumADHD/Roblox-File-Format
