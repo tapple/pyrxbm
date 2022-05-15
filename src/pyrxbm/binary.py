@@ -1,4 +1,6 @@
+from __future__ import annotations
 import struct
+from io import BytesIO
 
 # http://stackoverflow.com/questions/442188/readint-readbyte-readstring-etc-in-python
 class BinaryStream:
@@ -22,18 +24,18 @@ class BinaryStream:
         return self.read_bytes(length).decode("utf8")
 
     def write_string(self, s):
-        self.pack("<i", len(s)
+        self.pack("<i", len(s))
         self.write_bytes(s.encode("utf8"))
 
-    def read_instance_ids(self, count) -> list[int]
-        """ Reads and accumulates an interleaved buffer of integers. """
+    def read_instance_ids(self, count):
+        """Reads and accumulates an interleaved buffer of integers."""
         values = self.unpack("i" * count)
         for i in range(1, count):
-            values[i] += values[i - 1];
-        return values.ToList();
+            values[i] += values[i - 1]
+        return values
 
     def write_instance_ids(self, values):
-        """ Accumulatively writes an interleaved array of integers. """
+        """Accumulatively writes an interleaved array of integers."""
         inst_ids = list(values)
         for i in range(1, len(inst_ids)):
             inst_ids[i] -= values[i - 1]
@@ -44,7 +46,7 @@ class BinaryStream:
         buf = bytearray()
         while True:
             b = self.base_stream.read(1)
-            if b is None or b == b'\0':
+            if b is None or b == b"\0":
                 return buf
             else:
                 buf.extend(b)
@@ -54,10 +56,7 @@ class BinaryStream:
         self.write_bytes(b"\0")
 
 
-
 class INST:
-
-
     def __init__(self):
         self.ClassIndex = 0
         self.ClassName = ""
@@ -80,9 +79,9 @@ class INST:
 
         if self.IsService:
             self.RootedServices = []
-            for  i in range(self. NumInstances):
+            for i in range(self.NumInstances):
                 isRooted = stream.unpack("b")
-                self.RootedServices.append(isRooted);
+                self.RootedServices.append(isRooted)
 
         for i in range(self.NumInstances):
             instId = self.InstanceIds[i]
@@ -90,7 +89,7 @@ class INST:
             # inst.Referent = instId.ToString();
             # inst.IsService = IsService;
             if self.IsService:
-                isRooted = self.RootedServices[i];
+                isRooted = self.RootedServices[i]
                 # inst.Parent = file if isRooted else None
             # file.Instances[instId] = inst;
 
@@ -99,22 +98,23 @@ class INST:
             stream.write_string(self.ClassName)
             stream.pack("bi", self.IsService, self.NumInstances)
             stream.write_instance_ids(self.InstanceIds)
-            if (self.IsService):
-                for instId in InstanceIds:
-                # Instance service = file.Instances[instId];
-                # writer.Write(service.Parent == file);
-                stream.pack("b", false)
+            if self.IsService:
+                for instId in self.InstanceIds:
+                    # Instance service = file.Instances[instId];
+                    # writer.Write(service.Parent == file);
+                    stream.pack("b", False)
 
         def dump(self):
-            print(f"- ClassIndex:   {self.ClassIndex}");
-            print(f"- ClassName:    {self.ClassName}");
-            print(f"- IsService:    {self.IsService}");
+            print(f"- ClassIndex:   {self.ClassIndex}")
+            print(f"- ClassName:    {self.ClassName}")
+            print(f"- IsService:    {self.IsService}")
 
-            if (self.IsService and self.RootedServices is not None):
-                print(f"- RootedServices: `{', '.join(self.RootedServices)}`");
+            if self.IsService and self.RootedServices is not None:
+                print(f"- RootedServices: `{', '.join(self.RootedServices)}`")
 
-            print(f"- NumInstances: {self.NumInstances}");
-            print(f"- InstanceIds: `{', '.join(self.InstanceIds)}`");
+            print(f"- NumInstances: {self.NumInstances}")
+            print(f"- InstanceIds: `{', '.join(self.InstanceIds)}`")
+
 
 class BinaryRobloxFileChunk:
     """
@@ -135,46 +135,42 @@ class BinaryRobloxFileChunk:
 
     @property
     def HasCompressedData(self):
-        return (self.CompressedSize > 0);
+        return self.CompressedSize > 0
 
     def __str__(self):
-        chunkType = self.ChunkType.replace(b'\0', b' ');
-        return f"'{chunkType}' Chunk ({self.Size} bytes) [{self.Handler}]";
+        chunkType = self.ChunkType.replace(b"\0", b" ")
+        return f"'{chunkType}' Chunk ({self.Size} bytes) [{self.Handler}]"
 
     def deserialize(self, stream: BinaryStream):
-        (self.ClassIndex,) = stream.unpack("i")
-        self.ClassName = stream.read_string()
-        self.IsService, self.NumInstances = stream.unpack("bi")
-        self.InstanceIds = stream.read_instance_ids(self.NumInstances)
-        file.Classes[self.ClassIndex] = self
+        self.ChunkType, self.CompressedSize, self.Size, self.Reserved = stream.unpack(
+            "4siii"
+        )
 
-    def deserialize(self, stream: BinaryStream, file: BinaryRobloxFile):
-        self.ChunkType, self. CompressedSize, self.Size, self.Reserved = stream.unpack("4siii")
-
-        if (self.HasCompressedData):
-            self.CompressedData = stream.read_bytes(self.CompressedSize);
+        if self.HasCompressedData:
+            self.CompressedData = stream.read_bytes(self.CompressedSize)
             # Data = LZ4Codec.Decode(CompressedData, 0, CompressedSize, Size);
         else:
-            self.Data = stream.read_bytes(self.Size);
+            self.Data = stream.read_bytes(self.Size)
+
 
 """
     public
     BinaryRobloxFileChunk(BinaryRobloxFileWriter
     writer, bool
-    compress = true)
+    compress = True)
     {
     if (!writer.WritingChunk)
         throw
         new
         Exception(
-            "BinaryRobloxFileChunk: Supplied writer must have WritingChunk set to true.");
+            "BinaryRobloxFileChunk: Supplied writer must have WritingChunk set to True.");
 
     Stream
     stream = writer.BaseStream;
 
     using(BinaryReader
     reader = new
-    BinaryReader(stream, Encoding.UTF8, true))
+    BinaryReader(stream, Encoding.UTF8, True))
     {
         long
     length = (stream.Position - writer.ChunkStart);
@@ -220,7 +216,7 @@ class BinaryRobloxFileChunk:
         the
         chunk
         's data.
-        writer.WriteString(ChunkType, true);
+        writer.WriteString(ChunkType, True);
 
         writer.Write(CompressedSize);
         writer.Write(Size);
@@ -254,37 +250,38 @@ class BinaryRobloxFileChunk:
         stream.CopyTo(buffer, length);
 
         WriteBuffer = buffer.ToArray();
-        HasWriteBuffer = true;
+        HasWriteBuffer = True;
         }
         }
         }
         }
 """
 
-class BinaryRobloxFile(RobloxFile):
+
+class BinaryRobloxFile:  # (RobloxFile):
     # Header Specific
-    MAGIC_HEADER = b"<roblox!\x89\xff\x0d\x0a\x1a\x0a";
+    MAGIC_HEADER = b"<roblox!\x89\xff\x0d\x0a\x1a\x0a"
 
     def __init__(self):
         # Header Specific
-        self. Version: ushort = 0
-        self. NumClasses: uint = 0
-        self. NumInstances: uint = 0
-        self. Reserved: long = 0
+        self.Version = 0
+        self.NumClasses = 0
+        self.NumInstances = 0
+        self.Reserved = 0
 
         # Runtime Specific
-        self.ChunksImpl: list[BinaryRobloxFileChunk] ChunksImpl = []
+        self.ChunksImpl: list[BinaryRobloxFileChunk] = []
 
-        self.Instances: list[Instance] = []
-        self.Classes: list[INST] = []
+        self.Instances = []
+        self.Classes = []
 
         self.META = None
         self.SSTR = None
         self.SIGN = None
 
-        self.Name = "Bin:";
-        self.Referent = "-1";
-        self.ParentLocked = true;
+        self.Name = "Bin:"
+        self.Referent = "-1"
+        self.ParentLocked = True
 
     @property
     def Chunks(self):
@@ -306,7 +303,6 @@ class BinaryRobloxFile(RobloxFile):
     def SharedStrings(self):
         return self.SSTR.Strings if self.SSTR else {}
 
-
     @property
     def HasSignatures(self):
         return self.SIGN is not None
@@ -317,68 +313,54 @@ class BinaryRobloxFile(RobloxFile):
 
     def deserialize(self, file):
         stream = BinaryStream(file)
-        (self.version, self.subVersion, self.priority,
-         self.duration) = stream.unpack("HHif")
-        self.emote = stream.readCString().decode('ascii')
-        (self._loop_start, self._loop_end, self.loop, self.easeIn,
-         self.easeOut, self.handPosture, jointCount) = stream.unpack(
-            "ffiffii")
-        self.joints = list()
-        for jointNum in range(jointCount):
-            joint = JointMotion()
-            self.joints.append(joint)
-            joint.deserialize(stream)
-        (constraintCount,) = stream.unpack("i")
-        self.constraints = list()
-        for constraintNum in range(constraintCount):
-            constraint = JointConstraintSharedData()
-            self.constraints.append(constraint)
-            constraint.deserialize(stream)
-        return self
-
-    def deserialize(self, file):
-        stream = BinaryStream(file)
         # Verify the signature of the file.
-        ignature = stream.read_bytes(14);
-        if (signature != self.MAGIC_HEADER):
-            raise ValueError("Provided file's signature does not match BinaryRobloxFile.MAGIC_HEADER!");
+        signature = stream.read_bytes(14)
+        if signature != self.MAGIC_HEADER:
+            raise ValueError(
+                "Provided file's signature does not match BinaryRobloxFile.MAGIC_HEADER!"
+            )
 
         # Read header data.
-        self.Version, self.NumClasses, self.NumInstances, self.Reserved = stream.unpack("HIIq")
+        self.Version, self.NumClasses, self.NumInstances, self.Reserved = stream.unpack(
+            "HIIq"
+        )
 
         # Begin reading the file chunks.
-        reading = true;
+        reading = True
 
         self.Classes = (None,) * self.NumClasses
         self.Instances = (None,) * self.NumInstances
 
-        while (reading):
+        while reading:
             chunk = BinaryRobloxFileChunk()
             chunk.deserialize(stream)
-            handler = null;
+            handler = None
             if chunk.ChunkType == b"INST":
-                handler = INST();
+                handler = INST()
             elif chunk.ChunkType == b"PROP":
-                handler = PROP();
+                handler = None  # PROP();
             elif chunk.ChunkType == b"PRNT":
-                handler = PRNT();
+                handler = None  # PRNT();
             elif chunk.ChunkType == b"META":
-                handler = META();
+                handler = None  # META();
             elif chunk.ChunkType == b"SSTR":
-                handler = SSTR();
+                handler = None  # SSTR();
             elif chunk.ChunkType == b"SIGN":
-                handler = SIGN();
+                handler = None  # SIGN();
             elif chunk.ChunkType == b"END\0":
-                self.ChunksImpl.append(chunk);
-                reading = false;
+                self.ChunksImpl.append(chunk)
+                reading = False
             else:
-                self.LogError(f"BinaryRobloxFile - Unhandled chunk-type: {chunk.ChunkType}!");
+                self.LogError(
+                    f"BinaryRobloxFile - Unhandled chunk-type: {chunk.ChunkType}!"
+                )
 
             if handler:
                 chunk_stream = BinaryStream(BytesIO(chunk.Data))
-                chunk.Handler = handler;
-                handler.deserialize(chunk_stream, self);
-                ChunksImpl.Add(chunk);
+                chunk.Handler = handler
+                handler.deserialize(chunk_stream, self)
+                self.ChunksImpl.append(chunk)
+
 
 """
 public
@@ -410,7 +392,7 @@ ChunksImpl.Clear();
 
 NumInstances = 0;
 NumClasses = 0;
-SSTR = null;
+SSTR = None
 
 // Recursively
 capture
@@ -523,13 +505,3 @@ writer.Write(writeBuffer);
 }
 }
 """
-
-
-
-
-
-
-
-
-
-
