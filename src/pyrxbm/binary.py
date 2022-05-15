@@ -20,16 +20,16 @@ class BinaryStream:
         return self.write_bytes(struct.pack(fmt, *data))
 
     def read_string(self):
-        length = self.unpack("<i")
+        length = self.unpack("<I")
         return self.read_bytes(length).decode("utf8")
 
     def write_string(self, s):
-        self.pack("<i", len(s))
+        self.pack("<I", len(s))
         self.write_bytes(s.encode("utf8"))
 
     def read_instance_ids(self, count):
         """Reads and accumulates an interleaved buffer of integers."""
-        values = self.unpack("i" * count)
+        values = self.unpack(f"<{count}i")
         for i in range(1, count):
             values[i] += values[i - 1]
         return values
@@ -39,7 +39,7 @@ class BinaryStream:
         inst_ids = list(values)
         for i in range(1, len(inst_ids)):
             inst_ids[i] -= values[i - 1]
-        self.pack("i" * len(inst_ids), *inst_ids)
+        self.pack(f"<{len(inst_ids)}i", *inst_ids)
 
     # http://stackoverflow.com/questions/32774910/clean-way-to-read-a-null-terminated-c-style-string-from-a-file
     def readCString(self):
@@ -66,9 +66,9 @@ class INST:
         self.InstanceIds = []
 
     def deserialize(self, stream: BinaryStream, file: BinaryRobloxFile):
-        (self.ClassIndex,) = stream.unpack("i")
+        (self.ClassIndex,) = stream.unpack("<i")
         self.ClassName = stream.read_string()
-        self.IsService, self.NumInstances = stream.unpack("bi")
+        self.IsService, self.NumInstances = stream.unpack("<bi")
         self.InstanceIds = stream.read_instance_ids(self.NumInstances)
         file.Classes[self.ClassIndex] = self
 
@@ -80,7 +80,7 @@ class INST:
         if self.IsService:
             self.RootedServices = []
             for i in range(self.NumInstances):
-                isRooted = stream.unpack("b")
+                isRooted = stream.unpack("<b")
                 self.RootedServices.append(isRooted)
 
         for i in range(self.NumInstances):
@@ -94,15 +94,15 @@ class INST:
             # file.Instances[instId] = inst;
 
         def serialize(self, stream: BinaryStream, file: BinaryRobloxFile):
-            stream.pack("i", self.ClassIndex)
+            stream.pack("<i", self.ClassIndex)
             stream.write_string(self.ClassName)
-            stream.pack("bi", self.IsService, self.NumInstances)
+            stream.pack("<bi", self.IsService, self.NumInstances)
             stream.write_instance_ids(self.InstanceIds)
             if self.IsService:
                 for instId in self.InstanceIds:
                     # Instance service = file.Instances[instId];
                     # writer.Write(service.Parent == file);
-                    stream.pack("b", False)
+                    stream.pack("<b", False)
 
         def dump(self):
             print(f"- ClassIndex:   {self.ClassIndex}")
@@ -142,9 +142,12 @@ class BinaryRobloxFileChunk:
         return f"'{chunkType}' Chunk ({self.Size} bytes) [{self.Handler}]"
 
     def deserialize(self, stream: BinaryStream):
-        self.ChunkType, self.CompressedSize, self.Size, self.Reserved = stream.unpack(
-            "4siii"
-        )
+        (
+            self.ChunkType,
+            self.CompressedSize,
+            self.Size,
+            self.Reserved,
+        ) = stream.unpack("<4siii")
 
         if self.HasCompressedData:
             self.CompressedData = stream.read_bytes(self.CompressedSize)
@@ -321,9 +324,12 @@ class BinaryRobloxFile:  # (RobloxFile):
             )
 
         # Read header data.
-        self.Version, self.NumClasses, self.NumInstances, self.Reserved = stream.unpack(
-            "HIIq"
-        )
+        (
+            self.Version,
+            self.NumClasses,
+            self.NumInstances,
+            self.Reserved,
+        ) = stream.unpack("<HIIq")
 
         # Begin reading the file chunks.
         reading = True
@@ -336,7 +342,7 @@ class BinaryRobloxFile:  # (RobloxFile):
             chunk.deserialize(stream)
             handler = None
             if chunk.ChunkType == b"INST":
-                handler = INST()
+                handler = None  # INST()
             elif chunk.ChunkType == b"PROP":
                 handler = None  # PROP();
             elif chunk.ChunkType == b"PRNT":
@@ -348,18 +354,16 @@ class BinaryRobloxFile:  # (RobloxFile):
             elif chunk.ChunkType == b"SIGN":
                 handler = None  # SIGN();
             elif chunk.ChunkType == b"END\0":
-                self.ChunksImpl.append(chunk)
                 reading = False
             else:
                 self.LogError(
                     f"BinaryRobloxFile - Unhandled chunk-type: {chunk.ChunkType}!"
                 )
-
             if handler:
                 chunk_stream = BinaryStream(BytesIO(chunk.Data))
                 chunk.Handler = handler
                 handler.deserialize(chunk_stream, self)
-                self.ChunksImpl.append(chunk)
+            self.ChunksImpl.append(chunk)
 
 
 """
@@ -505,3 +509,11 @@ writer.Write(writeBuffer);
 }
 }
 """
+
+if __name__ == "__main__":
+    with open(
+        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.saved.rbxm", "rb"
+    ) as file:
+        root = BinaryRobloxFile()
+        root.deserialize(file)
+        print(root)
