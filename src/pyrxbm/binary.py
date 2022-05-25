@@ -3,6 +3,7 @@ import lz4.block
 import struct
 from io import BytesIO
 
+
 # http://stackoverflow.com/questions/442188/readint-readbyte-readstring-etc-in-python
 class BinaryStream:
     def __init__(self, base_stream):
@@ -21,7 +22,7 @@ class BinaryStream:
         return self.write_bytes(struct.pack(fmt, *data))
 
     def read_string(self):
-        length, = self.unpack("<I")
+        (length,) = self.unpack("<I")
         return self.read_bytes(length).decode("utf8")
 
     def write_string(self, s):
@@ -55,6 +56,30 @@ class BinaryStream:
     def writeCString(self, string):
         self.write_bytes(string)
         self.write_bytes(b"\0")
+
+
+class META:
+    def __init__(self):
+        self.Data = {}
+
+    def deserialize(self, stream: BinaryStream, file: BinaryRobloxFile):
+        (numEntries,) = stream.unpack("<I")
+        for i in range(numEntries):
+            key = stream.read_string()
+            value = stream.read_string()
+            self.Data[key] = value
+        file.META = self
+
+    def serialize(self, stream: BinaryStream):
+        stream.pack("<I", len(self.Data))
+        for key, value in self.Data.items():
+            stream.write_string(key)
+            stream.write_string(value)
+
+    def dump(self):
+        print(f"- NumEntries: {len(self.Data)}")
+        for key, value in self.Data.items():
+            print(f"  - {key}: {value}")
 
 
 class INST:
@@ -350,7 +375,7 @@ class BinaryRobloxFile:  # (RobloxFile):
             elif chunk.ChunkType == b"PRNT":
                 handler = None  # PRNT();
             elif chunk.ChunkType == b"META":
-                handler = None  # META();
+                handler = META()
             elif chunk.ChunkType == b"SSTR":
                 handler = None  # SSTR();
             elif chunk.ChunkType == b"SIGN":
@@ -525,4 +550,3 @@ if __name__ == "__main__":
     #         chunkfile.write(chunk.CompressedData)
     # chunkfile = open("E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1\\chunk00", "wb")
     # chunkfile.write(root.Chunks[0].CompressedData[2:])
-
