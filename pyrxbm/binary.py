@@ -2,6 +2,15 @@ from __future__ import annotations
 import lz4.block
 import struct
 from io import BytesIO
+from dataclasses import dataclass
+
+from .tree import PropertyType
+
+"""
+using RobloxFiles.Enums;
+using RobloxFiles.DataTypes;
+using RobloxFiles.Utility;
+"""
 
 
 # http://stackoverflow.com/questions/442188/readint-readbyte-readstring-etc-in-python
@@ -63,7 +72,7 @@ class META:
         self.Data = {}
 
     def deserialize(self, stream: BinaryStream, file: BinaryRobloxFile):
-        (numEntries,) = stream.unpack("<I")
+        (numEntries,) = stream.unpack("<i")
         for i in range(numEntries):
             key = stream.read_string()
             value = stream.read_string()
@@ -71,7 +80,7 @@ class META:
         file.META = self
 
     def serialize(self, stream: BinaryStream):
-        stream.pack("<I", len(self.Data))
+        stream.pack("<i", len(self.Data))
         for key, value in self.Data.items():
             stream.write_string(key)
             stream.write_string(value)
@@ -142,119 +151,40 @@ class INST:
             print(f"- InstanceIds: `{', '.join(self.InstanceIds)}`")
 
 
+@dataclass
+class PROP:
+    File: BinaryRobloxFile = None
+    Name: str = ""
+    ClassIndex: int = -1
+    Type: PropertyType = PropertyType.Unknown
+
+    @property
+    def Class(self):
+        return self.File.Classes[self.ClassIndex]
+
+    @property
+    def ClassName(self):
+        return self.Class.ClassName if self.Class else "UnknownClass"
+
+    def __str__(self):
+        return f"{self.Type} {self.ClassName}.{self.Name}"
+
+    def deserialize(self, stream: BinaryStream, file: RobloxBinaryFile):
+        self.File = file
+        (self.ClassIndex,) = stream.unpack("<i")
+        self.Name = stream.read_string()
+
+        (propType,) = stream.unpack("<b")
+        # self.Type = (PropertyType) propType;
+
+        assert (
+            self.Class is not None
+        ), f"Unknown class index {self.ClassIndex} (@ {self})!"
+        ids = self.Class.InstanceIds
+        instCount = self.Class.NumInstances
+
+
 """
-using
-System;
-using
-System.Collections.Generic;
-using
-System.Linq;
-using
-System.Text;
-
-using
-RobloxFiles.Enums;
-using
-RobloxFiles.DataTypes;
-using
-RobloxFiles.Utility;
-using
-System.IO;
-
-namespace
-RobloxFiles.BinaryFormat.Chunks
-{
-    public
-
-
-class PROP: IBinaryFileChunk
-
-
-{
-    private
-BinaryRobloxFile
-File;
-
-public
-string
-Name
-{get;
-internal
-set;}
-public
-int
-ClassIndex
-{get;
-internal
-set;}
-
-private
-INST
-Class = > File.Classes[ClassIndex];
-public
-string
-ClassName = > Class?.ClassName;
-
-public
-PropertyType
-Type
-{get;
-internal
-set;}
-
-internal
-byte
-TypeId
-{
-    get
-{
-return (byte)
-Type;}
-set
-{Type = (PropertyType)
-value;}
-}
-
-public
-override
-string
-ToString()
-{
-return $"{Type} {ClassName}.{Name}";
-}
-
-public
-void
-Load(BinaryRobloxFileReader
-reader)
-{
-File = reader.File;
-ClassIndex = reader.ReadInt32();
-Name = reader.ReadString();
-
-try
-    {
-        byte
-    propType = reader.ReadByte();
-    Type = (PropertyType)
-    propType;
-    }
-    catch(EndOfStreamException)
-    {
-        RobloxFile.LogError($"Got corrupted PROP chunk (@ {this})!");
-    return;
-    }
-
-    if (Class == null)
-    {
-    RobloxFile.LogError($"Unknown class index {ClassIndex} (@ {this})!");
-    return;
-    }
-
-    var
-    ids = Class.InstanceIds;
-    int
-    instCount = Class.NumInstances;
     var
     props = new
     Property[instCount];
@@ -1928,7 +1858,8 @@ try
                 }
 """
 
-                class BinaryRobloxFileChunk:
+
+class BinaryRobloxFileChunk:
     """
     BinaryRobloxFileChunk represents a generic LZ4 - compressed chunk
     of data in Roblox's Binary File Format.
@@ -2157,7 +2088,7 @@ class BinaryRobloxFile:  # (RobloxFile):
             if chunk.ChunkType == b"INST":
                 handler = INST()
             elif chunk.ChunkType == b"PROP":
-                handler = None  # PROP();
+                handler = PROP()
             elif chunk.ChunkType == b"PRNT":
                 handler = None  # PRNT();
             elif chunk.ChunkType == b"META":
