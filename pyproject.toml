@@ -1,0 +1,24 @@
+[project]
+name = "pyrbxm"
+version = "0.1"
+description = "Create and manipulate Roblox model/place files."
+readme = "README.md"
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+keywords = ["roblox", "rbxmx", "rbxl", "rbxm", "rbxlx", "roblox-dom", "roblox-model"]
+authors = [{email = "tapplek@gmail.com"}, {name = "Tapple Gao"}]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python"
+]
+
+dependencies = [
+  "lz4",
+]
+
+[project.urls]
+homepage = "github.com/tapple/pyrxbm"
+repository = "github.com"
+
+[project.scripts]
+pyrbxm = "main:main"
