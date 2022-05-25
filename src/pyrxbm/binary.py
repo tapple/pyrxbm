@@ -1,4 +1,5 @@
 from __future__ import annotations
+import lz4.block
 import struct
 from io import BytesIO
 
@@ -151,7 +152,8 @@ class BinaryRobloxFileChunk:
 
         if self.HasCompressedData:
             self.CompressedData = stream.read_bytes(self.CompressedSize)
-            # Data = LZ4Codec.Decode(CompressedData, 0, CompressedSize, Size);
+            self.Data = lz4.block.decompress(self.CompressedData, self.Size)
+            # print(self.Data)
         else:
             self.Data = stream.read_bytes(self.Size)
 
@@ -517,3 +519,10 @@ if __name__ == "__main__":
         root = BinaryRobloxFile()
         root.deserialize(file)
         print(root)
+    # for i, chunk in enumerate(root.Chunks):
+    #     with open(
+    #         f"E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1\\chunk{i:02d}.lz4", "wb") as chunkfile:
+    #         chunkfile.write(chunk.CompressedData)
+    # chunkfile = open("E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1\\chunk00", "wb")
+    # chunkfile.write(root.Chunks[0].CompressedData[2:])
+
