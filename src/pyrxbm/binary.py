@@ -21,7 +21,7 @@ class BinaryStream:
         return self.write_bytes(struct.pack(fmt, *data))
 
     def read_string(self):
-        length = self.unpack("<I")
+        length, = self.unpack("<I")
         return self.read_bytes(length).decode("utf8")
 
     def write_string(self, s):
@@ -30,7 +30,7 @@ class BinaryStream:
 
     def read_instance_ids(self, count):
         """Reads and accumulates an interleaved buffer of integers."""
-        values = self.unpack(f"<{count}i")
+        values = list(self.unpack(f"<{count}i"))
         for i in range(1, count):
             values[i] += values[i - 1]
         return values
@@ -336,15 +336,15 @@ class BinaryRobloxFile:  # (RobloxFile):
         # Begin reading the file chunks.
         reading = True
 
-        self.Classes = (None,) * self.NumClasses
-        self.Instances = (None,) * self.NumInstances
+        self.Classes = [None] * self.NumClasses
+        self.Instances = [None] * self.NumInstances
 
         while reading:
             chunk = BinaryRobloxFileChunk()
             chunk.deserialize(stream)
             handler = None
             if chunk.ChunkType == b"INST":
-                handler = None  # INST()
+                handler = INST()
             elif chunk.ChunkType == b"PROP":
                 handler = None  # PROP();
             elif chunk.ChunkType == b"PRNT":
