@@ -3,7 +3,7 @@ from pyrxbm.binary import BinaryRobloxFile
 
 def main():
     with open(
-        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.saved.rbxm", "rb"
+        "G:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.saved.rbxm", "rb"
     ) as file:
         root = BinaryRobloxFile()
         root.deserialize(file)
