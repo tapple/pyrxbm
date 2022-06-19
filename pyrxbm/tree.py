@@ -46,7 +46,7 @@ class Instance:
     Instances can have sets of properties loaded from *.rbxl/*.rbxm files.
     """
 
-    def __init__(self):
+    def __init__(self, ClassName):
 
         """A list of properties that are defined under this Instance."""
         self.props: dict[str, Property] = {}
@@ -54,6 +54,8 @@ class Instance:
         self.Children: set[Instance] = set()
         """ The raw unsafe value of the Instance's parent. """
         self.ParentUnsafe: Instance = None
+        """The ClassName of this Instance."""
+        self.ClassName: str = ClassName
         """ The name of this Instance. """
         self.Name: str = self.ClassName
         """ Indicates whether this Instance should be serialized. """
@@ -73,13 +75,13 @@ class Instance:
         """ A hashset of CollectionService tags assigned to this Instance. """
         self.Tags: set[str] = set()
         """ The public readonly access point of the attributes on this Instance. """
-        self.Attributes: RbxAttributes = RbxAttributes()
-        self.RefreshProperties()
+        # self.Attributes: RbxAttributes = RbxAttributes()
+        # self.RefreshProperties()
 
-    @property
-    def ClassName(self):
-        """The ClassName of this Instance."""
-        return self.GetType().Name
+    # @property
+    # def ClassName(self):
+    #     """The ClassName of this Instance."""
+    #     return self.GetType().Name
 
     def __str__(self):
         """The name of this Instance, if a Name property is defined."""

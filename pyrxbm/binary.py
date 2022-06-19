@@ -4,7 +4,7 @@ import struct
 from io import BytesIO
 from dataclasses import dataclass
 
-from .tree import PropertyType
+from .tree import PropertyType, Instance
 
 """
 using RobloxFiles.Enums;
@@ -136,12 +136,13 @@ class INST:
         for i in range(self.NumInstances):
             instId = self.InstanceIds[i]
             # inst = Activator.CreateInstance(instType) as Instance;
-            # inst.Referent = instId.ToString();
-            # inst.IsService = IsService;
+            inst = Instance(self.ClassName)
+            inst.Referent = str(instId)
+            inst.IsService = self.IsService
             if self.IsService:
                 isRooted = self.RootedServices[i]
-                # inst.Parent = file if isRooted else None
-            # file.Instances[instId] = inst;
+                inst.Parent = file if isRooted else None
+            file.Instances[instId] = inst
 
         def serialize(self, stream: BinaryStream, file: BinaryRobloxFile):
             stream.pack("<i", self.ClassIndex)
