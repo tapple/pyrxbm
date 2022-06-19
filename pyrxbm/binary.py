@@ -38,9 +38,21 @@ class BinaryStream:
         self.pack("<I", len(s))
         self.write_bytes(s.encode("utf8"))
 
+    def read_ints(self, count):
+        return list(self.unpack(f"<{count}i"))
+
+    def write_ints(self, values):
+        self.pack(f"<{len(values)}f", *values)
+
+    def read_floats(self, count):
+        return list(self.unpack(f"<{count}i"))
+
+    def write_floats(self, values):
+        self.pack(f"<{len(values)}f", *values)
+
     def read_instance_ids(self, count):
         """Reads and accumulates an interleaved buffer of integers."""
-        values = list(self.unpack(f"<{count}i"))
+        values = self.read_ints(count)
         for i in range(1, count):
             values[i] += values[i - 1]
         return values
@@ -50,7 +62,7 @@ class BinaryStream:
         inst_ids = list(values)
         for i in range(1, len(inst_ids)):
             inst_ids[i] -= values[i - 1]
-        self.pack(f"<{len(inst_ids)}i", *inst_ids)
+        self.write_ints(inst_ids)
 
     # http://stackoverflow.com/questions/32774910/clean-way-to-read-a-null-terminated-c-style-string-from-a-file
     def readCString(self):
@@ -99,6 +111,9 @@ class INST:
         self.RootedServices = []
         self.NumInstances = 0
         self.InstanceIds = []
+
+    def __str__(self):
+        return f"{self.ClassIndex}: {self.ClassName}x{self.NumInstances}"
 
     def deserialize(self, stream: BinaryStream, file: BinaryRobloxFile):
         (self.ClassIndex,) = stream.unpack("<i")
@@ -175,7 +190,7 @@ class PROP:
         self.Name = stream.read_string()
 
         (propType,) = stream.unpack("<b")
-        # self.Type = (PropertyType) propType;
+        self.Type = PropertyType(propType)
 
         assert (
             self.Class is not None
