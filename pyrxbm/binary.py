@@ -3,6 +3,7 @@ import lz4.block
 import struct
 from io import BytesIO
 from dataclasses import dataclass
+import numpy as np
 
 from .tree import PropertyType, Instance
 
@@ -13,8 +14,20 @@ using RobloxFiles.Utility;
 """
 
 
+# https://blog.roblox.com/2013/05/condense-and-compress-our-custom-binary-file-format/
+def decode_int(i):
+    return (i >> 1) ^ (-(i & 1))
+
+
+def encode_int(i):
+    return (i << 1) ^ (i >> 31)
+
+
 # http://stackoverflow.com/questions/442188/readint-readbyte-readstring-etc-in-python
 class BinaryStream:
+    UINT32 = np.dtype(">i4")
+    F32 = np.dtype(">f4")
+
     def __init__(self, base_stream):
         self.base_stream = base_stream
 
@@ -38,31 +51,33 @@ class BinaryStream:
         self.pack("<I", len(s))
         self.write_bytes(s.encode("utf8"))
 
+    # https://blog.roblox.com/2013/05/condense-and-compress-our-custom-binary-file-format/
+    def read_interleaved(self, count: int, size: int = 4):
+        return (
+            np.frombuffer(self.read_bytes(count * size), np.uint8)
+            .reshape(size, count)
+            .T.flatten()
+        )
+
     def read_ints(self, count):
-        return list(self.unpack(f"<{count}i"))
+        return decode_int(self.read_interleaved(count).view(self.UINT32))
 
     def write_ints(self, values):
         self.pack(f"<{len(values)}f", *values)
 
     def read_floats(self, count):
-        return list(self.unpack(f"<{count}i"))
+        return self.read_ints(count).view(self.F32)
 
     def write_floats(self, values):
         self.pack(f"<{len(values)}f", *values)
 
     def read_instance_ids(self, count):
         """Reads and accumulates an interleaved buffer of integers."""
-        values = self.read_ints(count)
-        for i in range(1, count):
-            values[i] += values[i - 1]
-        return values
+        return self.read_ints(count).cumsum()
 
     def write_instance_ids(self, values):
         """Accumulatively writes an interleaved array of integers."""
-        inst_ids = list(values)
-        for i in range(1, len(inst_ids)):
-            inst_ids[i] -= values[i - 1]
-        self.write_ints(inst_ids)
+        self.write_ints(np.ediff1d(np.asarray(values), to_begin=values[0]))
 
     # http://stackoverflow.com/questions/32774910/clean-way-to-read-a-null-terminated-c-style-string-from-a-file
     def readCString(self):

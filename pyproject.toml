@@ -14,6 +14,7 @@ classifiers = [
 
 dependencies = [
   "lz4",
+  "numpy",
 ]
 
 [project.urls]
