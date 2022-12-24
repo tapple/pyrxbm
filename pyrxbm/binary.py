@@ -2036,7 +2036,7 @@ class BinaryRobloxFileChunk:
 """
 
 
-class BinaryRobloxFile:  # (RobloxFile):
+class BinaryRobloxFile(Instance):  # (RobloxFile):
     # Header Specific
     MAGIC_HEADER = b"<roblox!\x89\xff\x0d\x0a\x1a\x0a"
 
