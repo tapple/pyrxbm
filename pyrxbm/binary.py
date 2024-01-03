@@ -28,8 +28,9 @@ def encode_int(i):
 
 # http://stackoverflow.com/questions/442188/readint-readbyte-readstring-etc-in-python
 class BinaryStream:
-    UINT32 = np.dtype(">i4")
-    F32 = np.dtype(">f4")
+    UINT32 = np.dtype(">u4")
+    INT32 = np.dtype(">i4")
+    F32 = np.dtype("<f4")
 
     def __init__(self, base_stream):
         self.base_stream = base_stream
@@ -62,14 +63,17 @@ class BinaryStream:
             .T.flatten()
         )
 
-    def read_ints(self, count):
+    def read_uints(self, count):
         return decode_int(self.read_interleaved(count).view(self.UINT32))
+
+    def read_ints(self, count):
+        return decode_int(self.read_interleaved(count).view(self.INT32))
 
     def write_ints(self, values):
         self.pack(f"<{len(values)}f", *values)
 
     def read_floats(self, count):
-        return self.read_ints(count).view(self.F32)
+        return self.read_uints(count).view(self.F32)
 
     def write_floats(self, values):
         self.pack(f"<{len(values)}f", *values)
@@ -313,13 +317,8 @@ class PROP:
             }
             """
         elif self.Type == PropertyType.Float:
-            """
-            {
-                float[] floats = read_floats();
-                read_properties(i => floats[i]);
-                break;
-            }
-            """
+            floats = read_floats()
+            read_properties(lambda i: floats[i])
             """
         elif self.Type == PropertyType.Double:
             {
