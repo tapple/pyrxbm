@@ -8,6 +8,9 @@ def main():
         root = BinaryRobloxFile()
         root.deserialize(file)
         keyframes = [o for o in root.Instances if o.ClassName == "Keyframe"]
+        keyframeSequences = [
+            o for o in root.Instances if o.ClassName == "KeyframeSequence"
+        ]
         times = [k.props["Time"] for k in keyframes]
         print(root)
     # for i, chunk in enumerate(root.Chunks):

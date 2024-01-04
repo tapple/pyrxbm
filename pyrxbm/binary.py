@@ -261,12 +261,7 @@ class PROP:
             else:
                 read_properties(lambda i: stream.read_string())
         elif self.Type == PropertyType.Bool:
-            """
-            {
-                read_properties(i => reader.ReadBoolean());
-                break;
-            }
-            """
+            read_properties(lambda i: bool(stream.read_bytes(1)[0]))
             """
         elif self.Type == PropertyType.Int:
             {
