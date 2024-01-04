@@ -26,10 +26,15 @@ def encode_int(i):
     return (i << 1) ^ (i >> 31)
 
 
+def encode_int64(i):
+    return (i << 1) ^ (i >> 63)
+
+
 # http://stackoverflow.com/questions/442188/readint-readbyte-readstring-etc-in-python
 class BinaryStream:
     UINT32 = np.dtype(">u4")
     INT32 = np.dtype(">i4")
+    INT64 = np.dtype(">i8")
     F32 = np.dtype("<f4")
 
     def __init__(self, base_stream):
@@ -71,6 +76,9 @@ class BinaryStream:
 
     def read_ints(self, count):
         return decode_int(self.read_interleaved(count).view(self.INT32))
+
+    def read_longs(self, count):
+        return decode_int(self.read_interleaved(count, 8).view(self.INT64))
 
     def write_ints(self, values):
         self.pack(f"<{len(values)}f", *values)
@@ -741,18 +749,8 @@ class PROP:
             }
             """
         elif self.Type == PropertyType.Int64:
-            """
-            {
-                long[] longs = reader.ReadInterleaved(instCount, (buffer, start) =>
-                {
-                    long result = BitConverter.ToInt64(buffer, start);
-                    return (long)((ulong)result >> 1) ^ (-(result & 1));
-                });
-
-                read_properties(i => longs[i]);
-                break;
-            }
-            """
+            longs = stream.read_longs(instCount)
+            read_properties(lambda i: longs[i])
             """
         elif self.Type == PropertyType.SharedString:
             {
