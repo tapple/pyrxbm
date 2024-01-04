@@ -72,7 +72,8 @@ class BinaryStream:
         )
 
     def read_uints(self, count):
-        return decode_int(self.read_interleaved(count).view(self.UINT32))
+        # no negative encoding
+        return self.read_interleaved(count).view(self.UINT32)
 
     def read_ints(self, count):
         return decode_int(self.read_interleaved(count).view(self.INT32))
@@ -84,7 +85,7 @@ class BinaryStream:
         self.pack(f"<{len(values)}f", *values)
 
     def read_floats(self, count):
-        return self.read_uints(count).view(self.F32)
+        return decode_int(self.read_uints(count)).view(self.F32)
 
     def write_floats(self, values):
         self.pack(f"<{len(values)}f", *values)
@@ -560,7 +561,9 @@ class PROP:
             }
             """
         elif self.Type == PropertyType.Enum:
-            """
+            enums = stream.read_uints(instCount)
+            read_properties(lambda i: enums[i])
+            """ TODO: Typecast by instance field type
             {
                 uint[] enums = reader.ReadUInts(instCount);
 
