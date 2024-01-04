@@ -47,9 +47,12 @@ class BinaryStream:
     def pack(self, fmt, *data):
         return self.write_bytes(struct.pack(fmt, *data))
 
-    def read_string(self):
+    def read_string_undecoded(self):
         (length,) = self.unpack("<I")
-        return self.read_bytes(length).decode("utf8")
+        return self.read_bytes(length)
+
+    def read_string(self, encoding="utf8"):
+        return self.read_string_undecoded().decode(encoding)
 
     def write_string(self, s):
         self.pack("<I", len(s))
@@ -253,54 +256,10 @@ class PROP:
                     instance.props[self.Name] = read(i)
 
         if self.Type == PropertyType.String:
-            """
-            {
-                read_properties(i =>
-                {
-                    string value = reader.ReadString();
-
-                    // Leave an access point for the original byte sequence, in case this is a BinaryString.
-                    // This will allow the developer to read the sequence without any mangling from C# strings.
-                    byte[] buffer = reader.GetLastStringBuffer();
-                    props[i].RawBuffer = buffer;
-
-                    // Check if this is going to be casted as a BinaryString.
-                    // BinaryStrings should use a type of byte[] instead.
-
-                    switch (Name)
-                    {
-                        case "Tags":
-                        case "AttributesSerialize":
-                        {
-                            return buffer;
-                        }
-                        default:
-                        {
-                            Property prop = props[i];
-                            Instance instance = prop.Instance;
-
-                            Type instType = instance.GetType();
-                            var member = ImplicitMember.Get(instType, Name);
-
-                            if (member != null)
-                            {
-                                object result = value;
-                                Type memberType = member.MemberType;
-
-                                if (memberType == typeof(byte[]))
-                                    result = buffer;
-
-                                return result;
-                            }
-
-                            return value;
-                        }
-                    }
-                });
-
-                break;
-            }
-            """
+            if self.Name in ("Tags", "AttributesSerialize"):
+                read_properties(lambda i: stream.read_string_undecoded())
+            else:
+                read_properties(lambda i: stream.read_string())
         elif self.Type == PropertyType.Bool:
             """
             {
