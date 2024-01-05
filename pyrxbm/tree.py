@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+from dataclasses import dataclass, fields, InitVar, field
 from enum import Enum
 from typing import Any
 
@@ -43,40 +45,63 @@ class PropertyType(Enum):
 # fmt: on
 
 
+@dataclass
 class Instance:
     """
     Describes an object in Roblox's DataModel hierarchy.
     Instances can have sets of properties loaded from *.rbxl/*.rbxm files.
     """
 
-    def __init__(self, ClassName):
+    """The ClassName of this Instance."""
+    ClassName: InitVar[str]
 
-        """A list of properties that are defined under this Instance."""
-        self.props: dict[str, Any] = {}
+    """ The name of this Instance. """
+    Name: str = ""
+    """ Indicates whether this Instance should be serialized. """
+    Archivable: bool = True
+    """ The source AssetId this instance was created in. """
+    SourceAssetId: int = -1
+    """ A hashset of CollectionService tags assigned to this Instance. """
+    Tags: bytes = b""
+    """ The public readonly access point of the attributes on this Instance. """
+    AttributesSerialize: bytes = b""
+
+    # AnimationClip properties
+    Loop: bool = True
+    Priority: int = 2  # enum
+
+    # KeyframeSequence properties
+    AuthoredHipHeight: float = 2
+
+    # Keyframe properties
+    Time: float = 0
+
+    # PoseBase properties
+    EasingDirection: int = 0  # enum
+    EasingStyle: int = 0  # enum
+    Weight: float = 1
+
+    # Pose properties
+    CFrame: str = ""
+
+    def __post_init__(self, ClassName: str):
+        self.ClassName = ClassName
+        self.Name = self.Name or self.ClassName
+
         """ The raw list of children for this Instance. """
-        self.Children: list[Instance] = []
+        self._children: list[Instance] = []
         """ The raw unsafe value of the Instance's parent. """
         self._parent: Instance = None
-        """The ClassName of this Instance."""
-        self.ClassName: str = ClassName
-        """ The name of this Instance. """
-        self.Name: str = self.ClassName
-        """ Indicates whether this Instance should be serialized. """
-        self.Archivable: bool = True
-        """ The source AssetId this instance was created in. """
-        self.SourceAssetId: int = -1
         """ A unique identifier declared for this instance. """
         self.UniqueId: UniqueId = None
         """ A context-dependent unique identifier for this instance when being serialized. """
-        self.Referent: str = None
+        self.referent: str = None
         """ Indicates whether the parent of this object is locked. """
-        self.ParentLocked: bool = False
+        self._parent_locked: bool = False
         """ Indicates whether this Instance is a Service. """
-        self.IsService: bool = False
+        self.is_service: bool = False
         """ Indicates whether this Instance has been destroyed. """
         self.Destroyed: bool = False
-        """ A hashset of CollectionService tags assigned to this Instance. """
-        self.Tags: set[str] = set()
         """ The public readonly access point of the attributes on this Instance. """
         # self.Attributes: RbxAttributes = RbxAttributes()
         # self.RefreshProperties()
@@ -86,43 +111,44 @@ class Instance:
     #     """The ClassName of this Instance."""
     #     return self.GetType().Name
 
-    def __str__(self):
-        """The name of this Instance, if a Name property is defined."""
-        return self.Name
+    def __repr__(self):
+        return (
+            f"{self.__class__.__name__}(ClassName={self.ClassName}, Name={self.Name})"
+        )
 
-    @property
-    def AttributesSerialize(self) -> bytes:
-        """The internal serialized data of this Instance's attributes"""
-        return self.Attributes.Save()
-
-    @AttributesSerialize.setter
-    def AttributesSerialize(self, value: bytes):
-        self.Attributes.Load(value)
-
-    @property
-    def SerializedTags(self) -> bytes:
-        """
-        Internal format of the Instance's CollectionService tags.
-        Property objects will look to this member for serializing the Tags property.
-        """
-        if not self.Tags:
-            return None
-        return "\0".join(self.Tags).encode()
-
-    @SerializedTags.setter
-    def SerializedTags(self, value: bytes):
-        """
-        Internal format of the Instance's CollectionService tags.
-        Property objects will look to this member for serializing the Tags property.
-        """
-        buffer = bytearray()
-        self.Tags.clear()
-        for i, id in enumerate(value):
-            if id != 0:
-                buffer.append(id)
-            if id == 0 or i == (len(value) - 1):
-                self.Tags.append(buffer.decode())
-                buffer.clear()
+    # @property
+    # def AttributesSerialize(self) -> bytes:
+    #     """The internal serialized data of this Instance's attributes"""
+    #     return self.Attributes.Save()
+    #
+    # @AttributesSerialize.setter
+    # def AttributesSerialize(self, value: bytes):
+    #     self.Attributes.Load(value)
+    #
+    # @property
+    # def SerializedTags(self) -> bytes:
+    #     """
+    #     Internal format of the Instance's CollectionService tags.
+    #     Property objects will look to this member for serializing the Tags property.
+    #     """
+    #     if not self.Tags:
+    #         return None
+    #     return "\0".join(self.Tags).encode()
+    #
+    # @SerializedTags.setter
+    # def SerializedTags(self, value: bytes):
+    #     """
+    #     Internal format of the Instance's CollectionService tags.
+    #     Property objects will look to this member for serializing the Tags property.
+    #     """
+    #     buffer = bytearray()
+    #     self.Tags.clear()
+    #     for i, id in enumerate(value):
+    #         if id != 0:
+    #             buffer.append(id)
+    #         if id == 0 or i == (len(value) - 1):
+    #             self.Tags.append(buffer.decode())
+    #             buffer.clear()
 
     """
         /// <summary>
@@ -226,6 +252,11 @@ public T Cast<T>() where T : Instance
 """
 
     @property
+    def Children(self) -> list[Instance]:
+        """The raw list of children for this Instance."""
+        return self._children[:]
+
+    @property
     def Parent(self) -> Instance | None:
         """
         The parent of this Instance, or null if the instance is the root of a tree.<para/>
@@ -239,7 +270,7 @@ public T Cast<T>() where T : Instance
 
     @Parent.setter
     def Parent(self, value: Instance | None):
-        if self.ParentLocked:
+        if self._parent_locked:
             new_parent = value.Name if value is not None else "NULL"
             curr_parent = self.Parent.Name if self.Parent is not None else "NULL"
 
@@ -258,9 +289,9 @@ public T Cast<T>() where T : Instance
             raise ValueError(f"Attempt to set {self.Name} as its own parent")
 
         if self._parent is not None:
-            self._parent.Children.remove(self)
+            self._parent._children.remove(self)
         if value is not None:
-            value.Children.append(self)
+            value._children.append(self)
         self._parent = value
 
     """
@@ -270,7 +301,7 @@ public T Cast<T>() where T : Instance
     /// </summary>
 public Instance[] GetChildren()
 {
-    return Children.ToArray();
+    return _children.ToArray();
 }
 
     /// <summary>
@@ -293,7 +324,7 @@ public Instance[] GetDescendants()
 {
     var results = new List<Instance>();
 
-    foreach (Instance child in Children)
+    foreach (Instance child in _children)
     {
         // Add this child to the results.
         results.Add(child);
@@ -329,7 +360,7 @@ public T FindFirstChild<T>(string name, bool recursive = false) where T : Instan
 {
     T result = null;
 
-    var query = Children
+    var query = _children
         .Where(child => child is T)
         .Where(child => name == child.Name)
         .Cast<T>();
@@ -340,7 +371,7 @@ public T FindFirstChild<T>(string name, bool recursive = false) where T : Instan
     }
     else if (recursive)
     {
-        foreach (Instance child in Children)
+        foreach (Instance child in _children)
         {
             T found = child.FindFirstChild<T>(name, true);
 
@@ -447,7 +478,7 @@ public T FindFirstAncestorWhichIsA<T>() where T : Instance
 /// <param name="className">The ClassName of the Instance to find.</param>
 public T FindFirstChildOfClass<T>(bool recursive = false) where T : Instance
 {
-    var query = Children
+    var query = _children
         .Where(child => child is T)
         .Cast<T>();
 
@@ -459,7 +490,7 @@ public T FindFirstChildOfClass<T>(bool recursive = false) where T : Instance
     }
     else if (recursive)
     {
-        foreach (Instance child in Children)
+        foreach (Instance child in _children)
         {
             T found = child.FindFirstChildOfClass<T>(true);
 
@@ -484,14 +515,14 @@ public void Destroy()
     props.Clear();
     
     Parent = null;
-    ParentLocked = true;
+    _parent_locked = true;
 
     Tags.Clear();
     Attributes.Clear();
 
-    while (Children.Any())
+    while (_children.Any())
     {
-        var child = Children.First();
+        var child = _children.First();
         child.Destroy();
     }
 }
@@ -576,7 +607,7 @@ public Instance Clone()
 /// <param name="recursive">Whether this should search descendants as well.</param>
 public T FindFirstChildWhichIsA<T>(bool recursive = false) where T : Instance
 {
-    var query = Children
+    var query = _children
         .Where(child => child is T)
         .Cast<T>();
 
@@ -585,7 +616,7 @@ public T FindFirstChildWhichIsA<T>(bool recursive = false) where T : Instance
     
     if (recursive)
     {
-        foreach (Instance child in Children)
+        foreach (Instance child in _children)
         {
             T found = child.FindFirstChildWhichIsA<T>(true);
 

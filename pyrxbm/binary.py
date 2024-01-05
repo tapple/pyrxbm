@@ -141,7 +141,7 @@ class INST:
     def __init__(self):
         self.ClassIndex = 0
         self.ClassName = ""
-        self.IsService = False
+        self.is_service = False
         self.RootedServices = []
         self.NumInstances = 0
         self.InstanceIds = []
@@ -152,7 +152,7 @@ class INST:
     def deserialize(self, stream: BinaryStream, file: BinaryRobloxFile):
         (self.ClassIndex,) = stream.unpack("<i")
         self.ClassName = stream.read_string()
-        self.IsService, self.NumInstances = stream.unpack("<bi")
+        self.is_service, self.NumInstances = stream.unpack("<bi")
         self.InstanceIds = stream.read_instance_ids(self.NumInstances)
         file.Classes[self.ClassIndex] = self
 
@@ -161,7 +161,7 @@ class INST:
         #     RobloxFile.LogError($"INST - Unknown class: {ClassName} while reading INST chunk.");
         #     return;
 
-        if self.IsService:
+        if self.is_service:
             self.RootedServices = []
             for i in range(self.NumInstances):
                 isRooted = stream.unpack("<b")
@@ -171,9 +171,9 @@ class INST:
             instId = self.InstanceIds[i]
             # inst = Activator.CreateInstance(instType) as Instance;
             inst = Instance(self.ClassName)
-            inst.Referent = str(instId)
-            inst.IsService = self.IsService
-            if self.IsService:
+            inst.referent = str(instId)
+            inst.is_service = self.is_service
+            if self.is_service:
                 isRooted = self.RootedServices[i]
                 inst.Parent = file if isRooted else None
             file.Instances[instId] = inst
@@ -181,9 +181,9 @@ class INST:
         def serialize(self, stream: BinaryStream, file: BinaryRobloxFile):
             stream.pack("<i", self.ClassIndex)
             stream.write_string(self.ClassName)
-            stream.pack("<bi", self.IsService, self.NumInstances)
+            stream.pack("<bi", self.is_service, self.NumInstances)
             stream.write_instance_ids(self.InstanceIds)
-            if self.IsService:
+            if self.is_service:
                 for instId in self.InstanceIds:
                     # Instance service = file.Instances[instId];
                     # writer.Write(service.Parent == file);
@@ -192,9 +192,9 @@ class INST:
         def dump(self):
             print(f"- ClassIndex:   {self.ClassIndex}")
             print(f"- ClassName:    {self.ClassName}")
-            print(f"- IsService:    {self.IsService}")
+            print(f"- is_service:    {self.is_service}")
 
-            if self.IsService and self.RootedServices is not None:
+            if self.is_service and self.RootedServices is not None:
                 print(f"- RootedServices: `{', '.join(self.RootedServices)}`")
 
             print(f"- NumInstances: {self.NumInstances}")
@@ -262,7 +262,7 @@ class PROP:
         def read_properties(read: Callable[[int], Any]):
             for i, instance in enumerate(instances):
                 if instance is not None:
-                    instance.props[self.Name] = read(i)
+                    setattr(instance, self.Name, read(i))
 
         if self.Type == PropertyType.String:
             if self.Name in ("Tags", "AttributesSerialize"):
@@ -1283,7 +1283,7 @@ class PROP:
 
                             if (value.IsDescendantOf(File))
                             {
-                                string refValue = value.Referent;
+                                string refValue = value.referent;
                                 int.TryParse(refValue, out referent);
                             }
                         }
@@ -1632,11 +1632,11 @@ class PRNT:
             {
                 Instance parent = inst.Parent;
 
-                int childId = int.Parse(inst.Referent);
+                int childId = int.Parse(inst.referent);
                 int parentId = -1;
 
                 if (parent != null)
-                    parentId = int.Parse(parent.Referent);
+                    parentId = int.Parse(parent.referent);
 
                 childIds.Add(childId);
                 parentIds.Add(parentId);
@@ -1661,11 +1661,11 @@ class PRNT:
             {
                 Instance parent = inst.Parent;
 
-                int childId = int.Parse(inst.Referent);
+                int childId = int.Parse(inst.referent);
                 int parentId = -1;
 
                 if (parent != null)
-                    parentId = int.Parse(parent.Referent);
+                    parentId = int.Parse(parent.referent);
 
                 childIds.Add(childId);
                 parentIds.Add(parentId);
@@ -1847,7 +1847,7 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         self.SIGN = None
 
         self.Name = "Bin:"
-        self.Referent = "-1"
+        self.referent = "-1"
         self.ParentLocked = True
 
     @property
@@ -1955,7 +1955,7 @@ BinaryRobloxFileWriter(this, workBuffer))
 the
 existing
 data. \
-    Referent = "-1";
+    referent = "-1";
 ChunksImpl.Clear();
 
 NumInstances = 0;

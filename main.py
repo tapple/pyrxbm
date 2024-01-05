@@ -11,7 +11,7 @@ def main():
         keyframeSequences = [
             o for o in root.Instances if o.ClassName == "KeyframeSequence"
         ]
-        times = [k.props["Time"] for k in keyframes]
+        times = [k.Time for k in keyframes]
         print(root)
     # for i, chunk in enumerate(root.Chunks):
     #     with open(
