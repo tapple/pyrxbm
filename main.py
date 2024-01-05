@@ -21,5 +21,14 @@ def main():
     # chunkfile.write(root.Chunks[0].CompressedData[2:])
 
 
+""" lua code
+a = workspace.AvatarModels["Teegle Horse"].StarterCharacter.AnimSaves.TH_lay1
+frames = a:GetChildren()
+table.sort(frames, function(a,b) return a.Time < b.Time end)
+print(frames)
+print(frames[1].BELLY.CFrame)
+"""
+
+
 if __name__ == "__main__":
     main()

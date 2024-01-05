@@ -425,6 +425,92 @@ class PROP:
                 break;
             }
             """
+        elif self.Type == PropertyType.CFrame:
+            header = stream.read_bytes(50)
+            print(header)
+            """
+            {
+                float[][] matrices = new float[instCount][];
+
+                for (int i = 0; i < instCount; i++)
+                {
+                    byte rawOrientId = reader.ReadByte();
+
+                    else
+                    {
+                        float[] matrix = new float[9];
+
+                        for (int m = 0; m < 9; m++)
+                        {
+                            float value = reader.ReadFloat();
+                            matrix[m] = value;
+                        }
+
+                        matrices[i] = matrix;
+                    }
+                }
+
+                float[] CFrame_X = read_floats(),
+                        CFrame_Y = read_floats(),
+                        CFrame_Z = read_floats();
+
+                var CFrames = new CFrame[instCount];
+
+                for (int i = 0; i < instCount; i++)
+                {
+                    float[] matrix = matrices[i];
+
+                    float x = CFrame_X[i],
+                          y = CFrame_Y[i],
+                          z = CFrame_Z[i];
+
+                    float[] components;
+
+                    if (matrix.Length == 12)
+                    {
+                        matrix[0] = x;
+                        matrix[1] = y;
+                        matrix[2] = z;
+
+                        components = matrix;
+                    }
+                    else
+                    {
+                        float[] position = new float[3] { x, y, z };
+                        components = position.Concat(matrix).ToArray();
+                    }
+
+                    CFrames[i] = new CFrame(components);
+                }
+
+                if (Type == PropertyType.OptionalCFrame)
+                {
+                    byte boolType = (byte)PropertyType.Bool;
+                    byte readType = reader.ReadByte();
+
+                    if (readType != boolType)
+                    {
+                        RobloxFile.LogError($"Unexpected property type in OptionalCFrame (expected {boolType}, got {readType})");
+                        read_properties(i => null);
+                        break;
+                    }
+
+                    for (int i = 0; i < instCount; i++)
+                    {
+                        CFrame cf = CFrames[i];
+                        bool archivable = reader.ReadBoolean();
+
+                        if (!archivable)
+                            cf = null;
+
+                        CFrames[i] = new Optional<CFrame>(cf);
+                    }
+                }
+
+                read_properties(i => CFrames[i]);
+                break;
+            }
+            """
         elif self.Type in (
             PropertyType.CFrame,
             PropertyType.Quaternion,
