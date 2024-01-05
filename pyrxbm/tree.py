@@ -1,3 +1,4 @@
+from __future__ import annotations
 from enum import Enum
 from typing import Any
 
@@ -53,7 +54,7 @@ class Instance:
         """A list of properties that are defined under this Instance."""
         self.props: dict[str, Any] = {}
         """ The raw list of children for this Instance. """
-        self.Children: set[Instance] = set()
+        self.Children: list[Instance] = []
         """ The raw unsafe value of the Instance's parent. """
         self._parent: Instance = None
         """The ClassName of this Instance."""
@@ -123,8 +124,7 @@ class Instance:
                 self.Tags.append(buffer.decode())
                 buffer.clear()
 
-
-"""
+    """
         /// <summary>
     /// Attempts to get the value of an attribute whose type is T.
     /// Returns false if no attribute was found with that type.
@@ -182,6 +182,7 @@ class Instance:
         return true;
     }
     """
+
     def IsAncestorOf(self, descendant: Instance | None) -> bool:
         """
         :param descendant: The instance whose descendance will be tested against this Instance.
@@ -223,6 +224,7 @@ public T Cast<T>() where T : Instance
     return this as T;
 }
 """
+
     @property
     def Parent(self) -> Instance | None:
         """
@@ -241,17 +243,22 @@ public T Cast<T>() where T : Instance
             new_parent = value.Name if value is not None else "NULL"
             curr_parent = self.Parent.Name if self.Parent is not None else "NULL"
 
-            raise ValueError(f"The Parent property of {self.Name} is locked, current parent: {curr_parent}, new parent {new_parent}")
+            raise ValueError(
+                f"The Parent property of {self.Name} is locked, current parent: {curr_parent}, new parent {new_parent}"
+            )
 
         if self.IsAncestorOf(value):
             path_a = self.GetFullName(".")
             path_b = value.GetFullName(".")
-            raise ValueError(f"Attempt to set parent of {path_a} to {path_b} would result in a circular reference")
+            raise ValueError(
+                f"Attempt to set parent of {path_a} to {path_b} would result in a circular reference"
+            )
 
         if self.Parent == self:
             raise ValueError(f"Attempt to set {self.Name} as its own parent")
 
-        self._parent.Children.remove(self)
+        if self._parent is not None:
+            self._parent.Children.remove(self)
         if value is not None:
             value.Children.append(self)
         self._parent = value
@@ -593,7 +600,7 @@ public T FindFirstChildWhichIsA<T>(bool recursive = false) where T : Instance
 }
 """
 
-    def GetFullName(self, separator: str="\\") -> str:
+    def GetFullName(self, separator: str = "\\") -> str:
         """
         :return: a string describing the index traversal of this Instance, starting from its root ancestor.
         """
@@ -605,6 +612,7 @@ public T FindFirstChildWhichIsA<T>(bool recursive = false) where T : Instance
             at = at.Parent
 
         return full_name
+
 
 """
     /// <summary>
