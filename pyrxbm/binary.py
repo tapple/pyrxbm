@@ -1589,40 +1589,18 @@ class PROP:
 class PRNT:
     FORMAT: int = 0
     File: BinaryRobloxFile = None
-    """
-using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace RobloxFiles.BinaryFormat.Chunks
-{
-    public class PRNT : IBinaryFileChunk
-    {
-        private const byte FORMAT = 0;
-        private BinaryRobloxFile File;
-
-        public void Load(BinaryRobloxFileReader reader)
-        {
-            BinaryRobloxFile file = reader.File;
-            File = file;
-
-            byte format = reader.ReadByte();
-            int idCount = reader.ReadInt32();
-
-            if (format != FORMAT)
-                throw new Exception($"Unexpected PRNT format: {format} (expected {FORMAT}!)");
-
-            var childIds = reader.ReadInstanceIds(idCount);
-            var parentIds = reader.ReadInstanceIds(idCount);
-            
-            for (int i = 0; i < idCount; i++)
-            {
-                int childId = childIds[i];
-                int parentId = parentIds[i];
-
-                Instance child = file.Instances[childId];
-                Instance parent = (parentId >= 0 ? file.Instances[parentId] : file);
-
+    def deserialize(self, stream: BinaryStream, file: BinaryRobloxFile):
+        format, id_count = stream.unpack("<bi")
+        assert (
+            format == self.FORMAT
+        ), f"Unexpected PRNT format: {format} (expected {self.FORMAT}!)"
+        child_ids = stream.read_instance_ids(id_count)
+        parent_ids = stream.read_instance_ids(id_count)
+        for child_id, parent_id in zip(child_ids, parent_ids):
+            child = file.Instances[child_id]
+            parent = file.Instances[parent_id] if parent_id >= 0 else file
+            """ will raise a KeyError on the lines above
                 if (child == null)
                 {
                     RobloxFile.LogError($"PRNT: could not parent {childId} to {parentId} because child {childId} was null.");
@@ -1634,11 +1612,11 @@ namespace RobloxFiles.BinaryFormat.Chunks
                     RobloxFile.LogError($"PRNT: could not parent {childId} to {parentId} because parent {parentId} was null.");
                     continue;
                 }
+            """
+            child.Parent = parent
 
-                child.Parent = (parentId >= 0 ? file.Instances[parentId] : file);
-            }
-        }
-
+    def serialize(self):
+        """
         public void Save(BinaryRobloxFileWriter writer)
         {
             var file = writer.File;
@@ -1670,7 +1648,10 @@ namespace RobloxFiles.BinaryFormat.Chunks
             writer.WriteInstanceIds(childIds);
             writer.WriteInstanceIds(parentIds);
         }
+        """
 
+    def write_info(self):
+        """
         public void WriteInfo(StringBuilder builder)
         {
             var childIds = new List<int>();
@@ -1694,9 +1675,7 @@ namespace RobloxFiles.BinaryFormat.Chunks
             builder.AppendLine($"- ChildIds:  {string.Join(", ", childIds)}");
             builder.AppendLine($"- ParentIds: {string.Join(", ", parentIds)}");
         }
-    }
-}
-"""
+        """
 
 
 class BinaryRobloxFileChunk:
