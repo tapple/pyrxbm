@@ -426,29 +426,15 @@ class PROP:
             }
             """
         elif self.Type == PropertyType.CFrame:
-            header = stream.read_bytes(50)
-            print(header)
+            matrices = np.zeros((instCount, 9))
+            for i in range(instCount):
+                rawOrientId = stream.read_bytes(1)[0]
+                if rawOrientId > 0:
+                    print(rawOrientId)
+                else:
+                    matrices[i] = np.frombuffer(stream.read_bytes(36), stream.F32)
+            print(matrices)
             """
-            {
-                float[][] matrices = new float[instCount][];
-
-                for (int i = 0; i < instCount; i++)
-                {
-                    byte rawOrientId = reader.ReadByte();
-
-                    else
-                    {
-                        float[] matrix = new float[9];
-
-                        for (int m = 0; m < 9; m++)
-                        {
-                            float value = reader.ReadFloat();
-                            matrix[m] = value;
-                        }
-
-                        matrices[i] = matrix;
-                    }
-                }
 
                 float[] CFrame_X = read_floats(),
                         CFrame_Y = read_floats(),

@@ -4,7 +4,7 @@ from dataclasses import dataclass, fields, InitVar, field
 from enum import Enum
 from typing import Any
 
-from .datatypes import UniqueId
+from .datatypes import UniqueId, CFrame
 
 
 # fmt: off
@@ -82,7 +82,7 @@ class Instance:
     Weight: float = 1
 
     # Pose properties
-    CFrame: str = ""
+    CFrame: CFrame = CFrame.Identity
 
     def __post_init__(self, ClassName: str):
         self.ClassName = ClassName
