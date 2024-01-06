@@ -20,19 +20,19 @@ using RobloxFiles.Utility;
 
 
 # https://blog.roblox.com/2013/05/condense-and-compress-our-custom-binary-file-format/
-def decode_int(i: npt.ArrayLike) -> npt.ArrayLike:
+def decode_int(i: np.ndarray) -> np.ndarray:
     return (i >> 1) ^ (-(i & 1))
 
 
-def decode_float(i: npt.ArrayLike) -> npt.ArrayLike:
+def decode_float(i: np.ndarray) -> np.ndarray:
     return (i >> 1) | (i << 31)
 
 
-def encode_int(i: npt.ArrayLike) -> npt.ArrayLike:
+def encode_int(i: np.ndarray) -> np.ndarray:
     return (i << 1) ^ (i >> 31)
 
 
-def encode_int64(i: npt.ArrayLike) -> npt.ArrayLike:
+def encode_int64(i: np.ndarray) -> np.ndarray:
     return (i << 1) ^ (i >> 63)
 
 
@@ -1769,8 +1769,12 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         # Runtime Specific
         self.ChunksImpl: list[BinaryRobloxFileChunk] = []
 
-        self.Instances: list[Instance] = []
-        self.Classes: list[INST | None] = []
+        self.Instances: list[Instance] = []  # reading/writing. parent -> child order
+        self.Classes: list[INST | None] = []  # reading
+        self.ClassMap: dict[str, INST] = {}  # writing
+        self.PostInstances: list[Instance] = []  # writing. child -> parent order
+        self.ChunkStart: int = 0  # writing
+        self.ChunkType = ""  # writing
 
         self.META = None
         self.SSTR = None
@@ -1859,147 +1863,115 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
                 handler.deserialize(chunk_stream, self)
             self.ChunksImpl.append(chunk)
 
+    def _record_instances(self, instances: list[Instance]) -> None:
+        for instance in instances:
+            if not instance.Archivable:
+                continue
 
-"""
-public
-override
-void
-Save(Stream
-stream)
-{
-// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
-// Generate
-the
-chunk
-data.
-// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+            inst_id = self.NumInstances
+            self.NumInstances += 1
+            class_name = instance.ClassName
 
-using(var
-workBuffer = new
-MemoryStream())
-using(var
-writer = new
-BinaryRobloxFileWriter(this, workBuffer))
-{
-// Clear
-the
-existing
-data. \
-    referent = "-1";
-ChunksImpl.Clear();
+            instance.referent = str(inst_id)
+            self.Instances.append(instance)
 
-NumInstances = 0;
-NumClasses = 0;
-SSTR = None
+            cls = self.ClassMap.get(class_name)
+            if cls is None:
+                cls = INST()
+                cls.ClassName = class_name
+                cls.IsService = instance.is_service
+                self.ClassMap[class_name] = cls
 
-// Recursively
-capture
-all
-instances and classes. \
-    writer.RecordInstances(Children);
+            cls.NumInstances += 1
+            cls.InstanceIds.append(inst_id)
 
-// Apply
-the
-recorded
-instances and classes. \
-    writer.ApplyClassMap();
+            self._record_instances(instance.Children)
+            self.PostInstances.append(instance)
 
-// Write
-the
-INST
-chunks.
-    foreach(INST
-inst in Classes)
-writer.SaveChunk(inst);
+    def serialize(self, file):
+        """Generate the chunk data."""
+        # Clear the existing data.
+        self.referent = "-1"
+        self.ChunksImpl.clear()
+        self.NumInstances = 0
+        self.NumClasses = 0
+        self.SSTR = None
+        self.ChunkStart = 0
+        self.ChunkType = ""
+        self.Instances.clear()
+        self.PostInstances.clear()
+        self.ClassMap.clear()
 
-// Write
-the
-PROP
-chunks.
-    foreach(INST
-inst in Classes)
-{
-    var
-props = PROP.CollectProperties(writer, inst);
+        # Recursively capture all instances and classes.
+        self._record_instances(self.Children)
+        """
+                // Apply the recorded instances and classes.
+                writer.ApplyClassMap();
 
-foreach(string
-propName in props.Keys)
-{
-    PROP
-prop = props[propName];
-writer.SaveChunk(prop);
-}
-}
+                // Write the INST chunks.
+                foreach (INST inst in Classes)
+                    writer.SaveChunk(inst);
 
-// Write
-the
-PRNT
-chunk.
-    var
-parents = new
-PRNT();
-writer.SaveChunk(parents);
+                // Write the PROP chunks.
+                foreach (INST inst in Classes)
+                {
+                    var props = PROP.CollectProperties(writer, inst);
 
-// Write
-the
-SSTR
-chunk.
-if (HasSharedStrings)
-writer.SaveChunk(SSTR, 0);
+                    foreach (string propName in props.Keys)
+                    {
+                        PROP prop = props[propName];
+                        writer.SaveChunk(prop);
+                    }
+                }
 
-// Write
-the
-META
-chunk.
-if (HasMetadata)
-writer.SaveChunk(META, 0);
+                // Write the PRNT chunk.
+                var parents = new PRNT();
+                writer.SaveChunk(parents);
 
-// Write
-the
-SIGN
-chunk.
-if (HasSignatures)
-writer.SaveChunk(SIGN);
+                // Write the SSTR chunk.
+                if (HasSharedStrings)
+                    writer.SaveChunk(SSTR, 0);
 
-// Write
-the
-END
-chunk. \
-    writer.WriteChunk("END", "</roblox>");
-}
+                // Write the META chunk.
+                if (HasMetadata)
+                    writer.SaveChunk(META, 0);
 
-// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
-// Write
-the
-chunk
-buffers
-with the header data
-// // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // // //
+                // Write the SIGN chunk.
+                if (HasSignatures)
+                    writer.SaveChunk(SIGN);
 
-using (BinaryWriter writer = new BinaryWriter(stream))
-{
-stream.Position = 0;
-stream.SetLength(0);
+                // Write the END chunk.
+                writer.WriteChunk("END", "</roblox>");
+            }
+        """
+        stream = BinaryStream(file)
 
-writer.Write(MagicHeader
-.Select(ch = > (byte)ch)
-.ToArray());
+        """
+            //////////////////////////////////////////////////////////////////////////
+            // Write the chunk buffers with the header data
+            //////////////////////////////////////////////////////////////////////////
 
-writer.Write(Version);
-writer.Write(NumClasses);
-writer.Write(NumInstances);
-writer.Write(Reserved);
+            using (BinaryWriter writer = new BinaryWriter(stream))
+            {
+                stream.Position = 0;
+                stream.SetLength(0);
 
-foreach (BinaryRobloxFileChunk chunk in Chunks)
-{
-if (chunk.HasWriteBuffer)
-{
-byte[] writeBuffer = chunk.WriteBuffer;
-writer.Write(writeBuffer);
-}
-}
-}
-}
-}
-}
+                writer.Write(MagicHeader
+                    .Select(ch => (byte)ch)
+                    .ToArray());
+
+                writer.Write(Version);
+                writer.Write(NumClasses);
+                writer.Write(NumInstances);
+                writer.Write(Reserved);
+
+                foreach (BinaryRobloxFileChunk chunk in Chunks)
+                {
+                    if (chunk.HasWriteBuffer)
+                    {
+                        byte[] writeBuffer = chunk.WriteBuffer;
+                        writer.Write(writeBuffer);
+                    }
+                }
+            }
 """
