@@ -7,6 +7,7 @@ import struct
 from io import BytesIO
 from dataclasses import dataclass
 import numpy as np
+import numpy.typing as npt
 
 from .datatypes import rotation_matrix_from_orient_id, CFrame
 from .tree import PropertyType, Instance
@@ -19,15 +20,19 @@ using RobloxFiles.Utility;
 
 
 # https://blog.roblox.com/2013/05/condense-and-compress-our-custom-binary-file-format/
-def decode_int(i):
+def decode_int(i: npt.ArrayLike) -> npt.ArrayLike:
     return (i >> 1) ^ (-(i & 1))
 
 
-def encode_int(i):
+def decode_float(i: npt.ArrayLike) -> npt.ArrayLike:
+    return (i >> 1) | (i << 31)
+
+
+def encode_int(i: npt.ArrayLike) -> npt.ArrayLike:
     return (i << 1) ^ (i >> 31)
 
 
-def encode_int64(i):
+def encode_int64(i: npt.ArrayLike) -> npt.ArrayLike:
     return (i << 1) ^ (i >> 63)
 
 
@@ -65,7 +70,7 @@ class BinaryStream:
         self.write_bytes(s.encode("utf8"))
 
     # https://blog.roblox.com/2013/05/condense-and-compress-our-custom-binary-file-format/
-    def read_interleaved(self, rows: int, dtype: np.dtype, cols=1):
+    def read_interleaved(self, rows: int, dtype: np.dtype, cols=1) -> np.ndarray:
         a = np.frombuffer(self.read_bytes(rows * dtype.itemsize * cols), np.uint8)
         b = a.reshape(cols, dtype.itemsize, rows).transpose(2, 0, 1)
         c = np.ascontiguousarray(b).view(dtype)
@@ -86,7 +91,7 @@ class BinaryStream:
         self.pack(f"<{len(values)}f", *values)
 
     def read_floats(self, rows, cols=1):
-        return decode_int(self.read_uints(rows, cols)).view(self.F32)
+        return decode_float(self.read_uints(rows, cols)).view(self.F32)
 
     def write_floats(self, values):
         self.pack(f"<{len(values)}f", *values)
