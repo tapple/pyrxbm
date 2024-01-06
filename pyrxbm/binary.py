@@ -8,6 +8,7 @@ from io import BytesIO
 from dataclasses import dataclass
 import numpy as np
 
+from .datatypes import rotation_matrix_from_orient_id, CFrame
 from .tree import PropertyType, Instance
 
 """
@@ -64,28 +65,28 @@ class BinaryStream:
         self.write_bytes(s.encode("utf8"))
 
     # https://blog.roblox.com/2013/05/condense-and-compress-our-custom-binary-file-format/
-    def read_interleaved(self, count: int, size: int = 4):
-        return (
-            np.frombuffer(self.read_bytes(count * size), np.uint8)
-            .reshape(size, count)
-            .T.flatten()
-        )
+    def read_interleaved(self, rows: int, dtype: np.dtype, cols=1):
+        a = np.frombuffer(self.read_bytes(rows * dtype.itemsize * cols), np.uint8)
+        b = a.reshape(cols, dtype.itemsize, rows).transpose(2, 0, 1)
+        c = np.ascontiguousarray(b).view(dtype)
+        d = c.reshape((rows,) if cols == 1 else (rows, cols))
+        return d
 
-    def read_uints(self, count):
+    def read_uints(self, rows, cols=1):
         # no negative encoding
-        return self.read_interleaved(count).view(self.UINT32)
+        return self.read_interleaved(rows, self.UINT32, cols)
 
-    def read_ints(self, count):
-        return decode_int(self.read_interleaved(count).view(self.INT32))
+    def read_ints(self, rows, cols=1):
+        return decode_int(self.read_interleaved(rows, self.INT32, cols))
 
-    def read_longs(self, count):
-        return decode_int(self.read_interleaved(count, 8).view(self.INT64))
+    def read_longs(self, rows, cols=1):
+        return decode_int(self.read_interleaved(rows, self.INT64, cols))
 
     def write_ints(self, values):
         self.pack(f"<{len(values)}f", *values)
 
-    def read_floats(self, count):
-        return decode_int(self.read_uints(count)).view(self.F32)
+    def read_floats(self, rows, cols=1):
+        return decode_int(self.read_uints(rows, cols)).view(self.F32)
 
     def write_floats(self, values):
         self.pack(f"<{len(values)}f", *values)
@@ -426,77 +427,15 @@ class PROP:
             }
             """
         elif self.Type == PropertyType.CFrame:
-            matrices = np.zeros((instCount, 9))
+            rots = np.zeros((instCount, 9), dtype=stream.F32)
             for i in range(instCount):
-                rawOrientId = stream.read_bytes(1)[0]
-                if rawOrientId > 0:
-                    print(rawOrientId)
+                raw_orient_id = stream.read_bytes(1)[0]
+                if raw_orient_id > 0:
+                    rots[i] = rotation_matrix_from_orient_id(raw_orient_id - 1)
                 else:
-                    matrices[i] = np.frombuffer(stream.read_bytes(36), stream.F32)
-            print(matrices)
-            """
-
-                float[] CFrame_X = read_floats(),
-                        CFrame_Y = read_floats(),
-                        CFrame_Z = read_floats();
-
-                var CFrames = new CFrame[instCount];
-
-                for (int i = 0; i < instCount; i++)
-                {
-                    float[] matrix = matrices[i];
-
-                    float x = CFrame_X[i],
-                          y = CFrame_Y[i],
-                          z = CFrame_Z[i];
-
-                    float[] components;
-
-                    if (matrix.Length == 12)
-                    {
-                        matrix[0] = x;
-                        matrix[1] = y;
-                        matrix[2] = z;
-
-                        components = matrix;
-                    }
-                    else
-                    {
-                        float[] position = new float[3] { x, y, z };
-                        components = position.Concat(matrix).ToArray();
-                    }
-
-                    CFrames[i] = new CFrame(components);
-                }
-
-                if (Type == PropertyType.OptionalCFrame)
-                {
-                    byte boolType = (byte)PropertyType.Bool;
-                    byte readType = reader.ReadByte();
-
-                    if (readType != boolType)
-                    {
-                        RobloxFile.LogError($"Unexpected property type in OptionalCFrame (expected {boolType}, got {readType})");
-                        read_properties(i => null);
-                        break;
-                    }
-
-                    for (int i = 0; i < instCount; i++)
-                    {
-                        CFrame cf = CFrames[i];
-                        bool archivable = reader.ReadBoolean();
-
-                        if (!archivable)
-                            cf = null;
-
-                        CFrames[i] = new Optional<CFrame>(cf);
-                    }
-                }
-
-                read_properties(i => CFrames[i]);
-                break;
-            }
-            """
+                    rots[i] = np.frombuffer(stream.read_bytes(36), stream.F32)
+            poss = stream.read_floats(instCount, 3)
+            read_properties(lambda i: CFrame(*poss[i], *rots[i]))
         elif self.Type in (
             PropertyType.CFrame,
             PropertyType.Quaternion,
