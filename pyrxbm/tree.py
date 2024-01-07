@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, fields, InitVar, field
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
-from .datatypes import UniqueId, CFrame
+from .datatypes import UniqueId
 
 
 # fmt: off
@@ -52,41 +51,19 @@ class Instance:
     Instances can have sets of properties loaded from *.rbxl/*.rbxm files.
     """
 
-    """The ClassName of this Instance."""
-    ClassName: InitVar[str]
-
     """ The name of this Instance. """
     Name: str = ""
-    """ Indicates whether this Instance should be serialized. """
-    Archivable: bool = True
     """ The source AssetId this instance was created in. """
-    SourceAssetId: int = -1
+    SourceAssetId: int = field(default=-1, repr=False)
     """ A hashset of CollectionService tags assigned to this Instance. """
-    Tags: bytes = b""
+    Tags: bytes = field(default=b"", repr=False)
     """ The public readonly access point of the attributes on this Instance. """
-    AttributesSerialize: bytes = b""
+    AttributesSerialize: bytes = field(default=b"", repr=False)
 
-    # AnimationClip properties
-    Loop: bool = True
-    Priority: int = 2  # enum
-
-    # KeyframeSequence properties
-    AuthoredHipHeight: float = 2
-
-    # Keyframe properties
-    Time: float = 0
-
-    # PoseBase properties
-    EasingDirection: int = 0  # enum
-    EasingStyle: int = 0  # enum
-    Weight: float = 1
-
-    # Pose properties
-    CFrame: CFrame = CFrame.Identity
-
-    def __post_init__(self, ClassName: str):
-        self.ClassName = ClassName
+    def __post_init__(self):
         self.Name = self.Name or self.ClassName
+        """ Indicates whether this Instance should be serialized. """
+        self.Archivable: bool = True  # not a field because not serialized
 
         """ The raw list of children for this Instance. """
         self._children: list[Instance] = []
@@ -106,15 +83,10 @@ class Instance:
         # self.Attributes: RbxAttributes = RbxAttributes()
         # self.RefreshProperties()
 
-    # @property
-    # def ClassName(self):
-    #     """The ClassName of this Instance."""
-    #     return self.GetType().Name
-
-    def __repr__(self):
-        return (
-            f"{self.__class__.__name__}(ClassName={self.ClassName}, Name={self.Name})"
-        )
+    @property
+    def ClassName(self):
+        """The ClassName of this Instance."""
+        return self.__class__.__name__
 
     # @property
     # def AttributesSerialize(self) -> bytes:

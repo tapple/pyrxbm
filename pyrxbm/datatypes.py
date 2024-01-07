@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 import numpy as np
 
@@ -16,6 +18,8 @@ def rotation_matrix_from_orient_id(orient_id: int):
 
 
 class CFrame:
+    Identity: CFrame
+
     def __init__(self, *args, mat=None):
         if mat is None:
             self._mat = np.identity(4, dtype=np.float32)

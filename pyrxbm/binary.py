@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import numpy as np
 import numpy.typing as npt
 
+from . import classes
 from .datatypes import rotation_matrix_from_orient_id, CFrame
 from .tree import PropertyType, Instance
 
@@ -175,18 +176,19 @@ class INST:
         self.InstanceIds = stream.read_instance_ids(self.NumInstances)
         file.Classes[self.ClassIndex] = self
 
-        # Type instType = Type.GetType($"RobloxFiles.{ClassName}");
-        # if instType is None:
-        #     RobloxFile.LogError($"INST - Unknown class: {ClassName} while reading INST chunk.");
-        #     return;
+        try:
+            instType = getattr(classes, self.ClassName)
+        except AttributeError:
+            raise ValueError(
+                f"INST - Unknown class: {self.ClassName} while reading INST chunk."
+            )
 
         if self.is_service:
             self.RootedServices = stream.unpack(f"{self.NumInstances}?")
 
         for i in range(self.NumInstances):
             instId = self.InstanceIds[i]
-            # inst = Activator.CreateInstance(instType) as Instance;
-            inst = Instance(self.ClassName)
+            inst = instType()
             inst.referent = str(instId)
             inst.is_service = self.is_service
             if self.is_service:
@@ -284,7 +286,7 @@ class PROP:
             else:
                 read_properties(lambda i: stream.read_string())
         elif self.Type == PropertyType.Bool:
-            read_properties(lambda i: stream.unpack("<?"))
+            read_properties(lambda i: stream.unpack("<?")[0])
             """
         elif self.Type == PropertyType.Int:
             {
