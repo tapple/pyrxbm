@@ -1625,6 +1625,21 @@ class BinaryRobloxFileChunk:
         self.WriteBuffer = bytearray()
         self.Handler = None
 
+    @classmethod
+    def with_data(cls, chunk_type: bytes, data: bytes, compress: bool = True):
+        if len(chunk_type) != 4:
+            raise ValueError(
+                f"chunk_type {chunk_type!r} has length {len(chunk_type)}, but should have length 4"
+            )
+        chunk = cls()
+        chunk.ChunkType = chunk_type
+        chunk.Data = data
+        chunk.Size = len(data)
+        if compress:
+            chunk.CompressedData = lz4.block.compress(chunk.Data)
+            chunk.CompressedSize = len(chunk.CompressedData)
+        return chunk
+
     @property
     def HasCompressedData(self):
         return self.CompressedSize > 0
@@ -1650,46 +1665,6 @@ class BinaryRobloxFileChunk:
 
 
 """
-    public
-    BinaryRobloxFileChunk(BinaryRobloxFileWriter
-    writer, bool
-    compress = True)
-    {
-    if (!writer.WritingChunk)
-        throw
-        new
-        Exception(
-            "BinaryRobloxFileChunk: Supplied writer must have WritingChunk set to True.");
-
-    Stream
-    stream = writer.BaseStream;
-
-    using(BinaryReader
-    reader = new
-    BinaryReader(stream, Encoding.UTF8, True))
-    {
-        long
-    length = (stream.Position - writer.ChunkStart);
-    stream.Position = writer.ChunkStart;
-
-    Size = (int)
-    length;
-    Data = reader.ReadBytes(Size);
-    }
-
-    CompressedData = LZ4Codec.Encode(Data, 0, Size);
-    CompressedSize = CompressedData.Length;
-
-    if (!compress | | CompressedSize > Size)
-        {
-            CompressedSize = 0;
-        CompressedData = Array.Empty < byte > ();
-        }
-
-        ChunkType = writer.ChunkType;
-        Reserved = 0;
-        }
-
         public
         void
         WriteChunk(BinaryRobloxFileWriter
@@ -1887,6 +1862,83 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
 
             self._record_instances(instance.Children)
             self.PostInstances.append(instance)
+
+    """
+        internal BinaryRobloxFileChunk SaveChunk(IBinaryFileChunk handler, int insertPos = -1)
+        {
+            StartWritingChunk(handler);
+            handler.Save(this);
+
+            var chunk = FinishWritingChunk();
+
+            if (insertPos >= 0)
+                File.ChunksImpl.Insert(insertPos, chunk);
+            else
+                File.ChunksImpl.Add(chunk);
+
+            return chunk;
+        }
+        
+        private bool StartWritingChunk(IBinaryFileChunk chunk)
+        {
+            if (!WritingChunk)
+            {
+                string chunkType = chunk.GetType().Name;
+
+                StartWritingChunk(chunkType);
+                Chunk = chunk;
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool StartWritingChunk(string chunkType)
+        {
+            if (chunkType.Length != 4)
+                throw new Exception("BinaryFileWriter.StartWritingChunk - ChunkType length should be 4!");
+
+            if (!WritingChunk)
+            {
+                WritingChunk = true;
+
+                ChunkType = chunkType;
+                ChunkStart = BaseStream.Position;
+                
+                return true;
+            }
+
+            return false;
+        }
+
+        // Compresses the data that was written into a BinaryRobloxFileChunk and writes it.
+        private BinaryRobloxFileChunk FinishWritingChunk(bool compress = true)
+        {
+            if (!WritingChunk)
+                throw new Exception($"BinaryRobloxFileWriter: Cannot finish writing a chunk without starting one!");
+
+            // Create the compressed chunk.
+            var chunk = new BinaryRobloxFileChunk(this, compress);
+
+            // Clear out the uncompressed data.
+            BaseStream.Position = ChunkStart;
+            BaseStream.SetLength(ChunkStart);
+
+            // Write the compressed chunk.
+            chunk.Handler = Chunk;
+            chunk.WriteChunk(this);
+            
+            // Clean up for the next chunk.
+            WritingChunk = false;
+            
+            ChunkStart = 0;
+            ChunkType = "";
+            Chunk = null;
+
+            return chunk;
+        }
+    """
 
     def serialize(self, file):
         """Generate the chunk data."""
