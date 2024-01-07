@@ -20,6 +20,7 @@ using RobloxFiles.Utility;
 
 
 # https://blog.roblox.com/2013/05/condense-and-compress-our-custom-binary-file-format/
+# these functions all return an array with native endian, regardless of the endiannes of the input
 def decode_int(i: np.ndarray) -> np.ndarray:
     return (i >> 1) ^ (-(i & 1))
 
@@ -41,7 +42,7 @@ class BinaryStream:
     UINT32 = np.dtype(">u4")
     INT32 = np.dtype(">i4")
     INT64 = np.dtype(">i8")
-    F32 = np.dtype("<f4")
+    F32 = np.dtype(">f4")
 
     def __init__(self, base_stream):
         self.base_stream = base_stream
@@ -77,24 +78,36 @@ class BinaryStream:
         d = c.reshape((rows,) if cols == 1 else (rows, cols))
         return d
 
+    def write_interleaved(self, values, dtype: np.dtype = None):
+        # accepts a dtype because values almost always need to be byteswapped
+        a = np.asarray(values, dtype)
+        self.write_bytes(a.reshape(a.shape[0], -1).view(np.uint8).T.tobytes())
+
     def read_uints(self, rows, cols=1):
         # no negative encoding
         return self.read_interleaved(rows, self.UINT32, cols)
 
+    def write_uints(self, values):
+        # no negative encoding
+        self.write_interleaved(values, self.UINT32)
+
     def read_ints(self, rows, cols=1):
         return decode_int(self.read_interleaved(rows, self.INT32, cols))
+
+    def write_ints(self, values):
+        self.write_interleaved(encode_int(np.asarray(values, np.int32)), self.INT32)
 
     def read_longs(self, rows, cols=1):
         return decode_int(self.read_interleaved(rows, self.INT64, cols))
 
-    def write_ints(self, values):
-        self.pack(f"<{len(values)}f", *values)
+    def write_longs(self, values):
+        self.write_interleaved(encode_int64(np.asarray(values, np.int64)), self.INT64)
 
     def read_floats(self, rows, cols=1):
-        return decode_float(self.read_uints(rows, cols)).view(self.F32)
+        return decode_float(self.read_uints(rows, cols)).view(np.float32)
 
     def write_floats(self, values):
-        self.pack(f"<{len(values)}f", *values)
+        self.write_uints(encode_int(np.asarray(values, np.float32).view(np.uint32)))
 
     def read_instance_ids(self, count):
         """Reads and accumulates an interleaved buffer of integers."""
@@ -1880,6 +1893,9 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         # Recursively capture all instances and classes.
         self._record_instances(self.Children)
         self.Classes = sorted(self.ClassMap.values(), key=lambda c: c.ClassName)
+        for i, cls in enumerate(self.Classes):
+            cls.ClassIndex = i
+
         # Write the INST chunks.
         for inst in self.Classes:
             self.ChunksImpl.append(self._build_chunk(inst))
