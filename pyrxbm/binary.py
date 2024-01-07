@@ -1770,7 +1770,7 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         self.ChunksImpl: list[BinaryRobloxFileChunk] = []
 
         self.Instances: list[Instance] = []  # reading/writing. parent -> child order
-        self.Classes: list[INST | None] = []  # reading
+        self.Classes: list[INST | None] = []  # reading, writing
         self.ClassMap: dict[str, INST] = {}  # writing
         self.PostInstances: list[Instance] = []  # writing. child -> parent order
         self.ChunkStart: int = 0  # writing
@@ -1904,10 +1904,8 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
 
         # Recursively capture all instances and classes.
         self._record_instances(self.Children)
+        self.Classes = sorted(self.ClassMap.values(), key=lambda c: c.ClassName)
         """
-                // Apply the recorded instances and classes.
-                writer.ApplyClassMap();
-
                 // Write the INST chunks.
                 foreach (INST inst in Classes)
                     writer.SaveChunk(inst);

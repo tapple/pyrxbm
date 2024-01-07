@@ -11,6 +11,7 @@ def main():
     keyframeSequences = [o for o in root.Instances if o.ClassName == "KeyframeSequence"]
     times = [k.Time for k in keyframes]
     instances_read = root.Instances[:]
+    class_names_read = [c.ClassName for c in root.Classes]
     chunk_data_read = [chunk.Data for chunk in root.Chunks]
     print(root)
     with open(
@@ -18,7 +19,9 @@ def main():
     ) as file:
         root.serialize(file)
     instances_written = root.Instances[:]
+    class_names_written = [c.ClassName for c in root.Classes]
     assert instances_read == instances_written
+    assert class_names_read == class_names_written
     chunk_data_written = [chunk.Data for chunk in root.Chunks]
 
 
