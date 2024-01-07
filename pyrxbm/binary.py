@@ -158,7 +158,7 @@ class INST:
     def deserialize(self, stream: BinaryStream, file: BinaryRobloxFile):
         (self.ClassIndex,) = stream.unpack("<i")
         self.ClassName = stream.read_string()
-        self.is_service, self.NumInstances = stream.unpack("<bi")
+        self.is_service, self.NumInstances = stream.unpack("<?i")
         self.InstanceIds = stream.read_instance_ids(self.NumInstances)
         file.Classes[self.ClassIndex] = self
 
@@ -168,10 +168,7 @@ class INST:
         #     return;
 
         if self.is_service:
-            self.RootedServices = []
-            for i in range(self.NumInstances):
-                isRooted = stream.unpack("<b")
-                self.RootedServices.append(isRooted)
+            self.RootedServices = stream.unpack(f"{self.NumInstances}?")
 
         for i in range(self.NumInstances):
             instId = self.InstanceIds[i]
@@ -184,27 +181,25 @@ class INST:
                 inst.Parent = file if isRooted else None
             file.Instances[instId] = inst
 
-        def serialize(self, stream: BinaryStream, file: BinaryRobloxFile):
-            stream.pack("<i", self.ClassIndex)
-            stream.write_string(self.ClassName)
-            stream.pack("<bi", self.is_service, self.NumInstances)
-            stream.write_instance_ids(self.InstanceIds)
-            if self.is_service:
-                for instId in self.InstanceIds:
-                    # Instance service = file.Instances[instId];
-                    # writer.Write(service.Parent == file);
-                    stream.pack("<b", False)
+    def serialize(self, stream: BinaryStream, file: BinaryRobloxFile):
+        stream.pack("<i", self.ClassIndex)
+        stream.write_string(self.ClassName)
+        stream.pack("<?i", self.is_service, self.NumInstances)
+        stream.write_instance_ids(self.InstanceIds)
+        if self.is_service:
+            # stream.pack(f"{self.NumInstances}?", *([False] * self.NumInstances))
+            stream.write_bytes(b"\0" * self.NumInstances)
 
-        def dump(self):
-            print(f"- ClassIndex:   {self.ClassIndex}")
-            print(f"- ClassName:    {self.ClassName}")
-            print(f"- is_service:    {self.is_service}")
+    def dump(self):
+        print(f"- ClassIndex:   {self.ClassIndex}")
+        print(f"- ClassName:    {self.ClassName}")
+        print(f"- is_service:    {self.is_service}")
 
-            if self.is_service and self.RootedServices is not None:
-                print(f"- RootedServices: `{', '.join(self.RootedServices)}`")
+        if self.is_service and self.RootedServices is not None:
+            print(f"- RootedServices: `{', '.join(self.RootedServices)}`")
 
-            print(f"- NumInstances: {self.NumInstances}")
-            print(f"- InstanceIds: `{', '.join(self.InstanceIds)}`")
+        print(f"- NumInstances: {self.NumInstances}")
+        print(f"- InstanceIds: `{', '.join(self.InstanceIds)}`")
 
 
 @dataclass
@@ -276,7 +271,7 @@ class PROP:
             else:
                 read_properties(lambda i: stream.read_string())
         elif self.Type == PropertyType.Bool:
-            read_properties(lambda i: bool(stream.read_bytes(1)[0]))
+            read_properties(lambda i: stream.unpack("<?"))
             """
         elif self.Type == PropertyType.Int:
             {
@@ -441,12 +436,12 @@ class PROP:
                     rots[i] = np.frombuffer(stream.read_bytes(36), stream.F32)
             poss = stream.read_floats(instCount, 3)
             read_properties(lambda i: CFrame(*poss[i], *rots[i]))
+            """
         elif self.Type in (
             PropertyType.CFrame,
             PropertyType.Quaternion,
             PropertyType.OptionalCFrame,
         ):
-            """
             {
                 float[][] matrices = new float[instCount][];
 
@@ -1748,8 +1743,6 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         self.Classes: list[INST | None] = []  # reading, writing
         self.ClassMap: dict[str, INST] = {}  # writing
         self.PostInstances: list[Instance] = []  # writing. child -> parent order
-        self.ChunkStart: int = 0  # writing
-        self.ChunkType = ""  # writing
 
         self.META = None
         self.SSTR = None
@@ -1863,82 +1856,14 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
             self._record_instances(instance.Children)
             self.PostInstances.append(instance)
 
-    """
-        internal BinaryRobloxFileChunk SaveChunk(IBinaryFileChunk handler, int insertPos = -1)
-        {
-            StartWritingChunk(handler);
-            handler.Save(this);
-
-            var chunk = FinishWritingChunk();
-
-            if (insertPos >= 0)
-                File.ChunksImpl.Insert(insertPos, chunk);
-            else
-                File.ChunksImpl.Add(chunk);
-
-            return chunk;
-        }
-        
-        private bool StartWritingChunk(IBinaryFileChunk chunk)
-        {
-            if (!WritingChunk)
-            {
-                string chunkType = chunk.GetType().Name;
-
-                StartWritingChunk(chunkType);
-                Chunk = chunk;
-
-                return true;
-            }
-
-            return false;
-        }
-
-        private bool StartWritingChunk(string chunkType)
-        {
-            if (chunkType.Length != 4)
-                throw new Exception("BinaryFileWriter.StartWritingChunk - ChunkType length should be 4!");
-
-            if (!WritingChunk)
-            {
-                WritingChunk = true;
-
-                ChunkType = chunkType;
-                ChunkStart = BaseStream.Position;
-                
-                return true;
-            }
-
-            return false;
-        }
-
-        // Compresses the data that was written into a BinaryRobloxFileChunk and writes it.
-        private BinaryRobloxFileChunk FinishWritingChunk(bool compress = true)
-        {
-            if (!WritingChunk)
-                throw new Exception($"BinaryRobloxFileWriter: Cannot finish writing a chunk without starting one!");
-
-            // Create the compressed chunk.
-            var chunk = new BinaryRobloxFileChunk(this, compress);
-
-            // Clear out the uncompressed data.
-            BaseStream.Position = ChunkStart;
-            BaseStream.SetLength(ChunkStart);
-
-            // Write the compressed chunk.
-            chunk.Handler = Chunk;
-            chunk.WriteChunk(this);
-            
-            // Clean up for the next chunk.
-            WritingChunk = false;
-            
-            ChunkStart = 0;
-            ChunkType = "";
-            Chunk = null;
-
-            return chunk;
-        }
-    """
+    def _build_chunk(self, handler, compress: bool = True) -> BinaryRobloxFileChunk:
+        stream = BinaryStream(BytesIO())
+        handler.serialize(stream, self)
+        return BinaryRobloxFileChunk.with_data(
+            handler.__class__.__name__.encode(),
+            stream.base_stream.getvalue(),
+            compress,
+        )
 
     def serialize(self, file):
         """Generate the chunk data."""
@@ -1948,8 +1873,6 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         self.NumInstances = 0
         self.NumClasses = 0
         self.SSTR = None
-        self.ChunkStart = 0
-        self.ChunkType = ""
         self.Instances.clear()
         self.PostInstances.clear()
         self.ClassMap.clear()
@@ -1957,11 +1880,11 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         # Recursively capture all instances and classes.
         self._record_instances(self.Children)
         self.Classes = sorted(self.ClassMap.values(), key=lambda c: c.ClassName)
-        """
-                // Write the INST chunks.
-                foreach (INST inst in Classes)
-                    writer.SaveChunk(inst);
+        # Write the INST chunks.
+        for inst in self.Classes:
+            self.ChunksImpl.append(self._build_chunk(inst))
 
+        """
                 // Write the PROP chunks.
                 foreach (INST inst in Classes)
                 {

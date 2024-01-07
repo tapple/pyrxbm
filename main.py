@@ -20,9 +20,10 @@ def main():
         root.serialize(file)
     instances_written = root.Instances[:]
     class_names_written = [c.ClassName for c in root.Classes]
+    chunk_data_written = [chunk.Data for chunk in root.Chunks]
     assert instances_read == instances_written
     assert class_names_read == class_names_written
-    chunk_data_written = [chunk.Data for chunk in root.Chunks]
+    assert chunk_data_read[1:4] == chunk_data_written
 
 
 """ lua code
