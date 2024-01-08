@@ -1378,25 +1378,7 @@ class PROP:
                 }
             """
         elif self.Type == PropertyType.Int64:
-            """
-            {
-                var longs = new List<long>();
-
-                props.ForEach(prop =>
-                {
-                    long value = prop.CastValue<long>();
-                    longs.Add(value);
-                });
-
-                writer.WriteInterleaved(longs, value =>
-                {
-                    // Move the sign bit to the front.
-                    return (value << 1) ^ (value >> 63);
-                });
-
-                break;
-            }
-            """
+            stream.write_longs(props)
             """
         elif self.Type == PropertyType.SharedString:
                 {
