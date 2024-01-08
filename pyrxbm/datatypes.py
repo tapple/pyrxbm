@@ -14,30 +14,51 @@ def normal_id_to_vector(normal_id: int) -> np.ndarray:
     return coords
 
 
-_NORMAL_VECTORS = np.row_stack([normal_id_to_vector(i) for i in range(6)])
+_NORMAL_VECTORS = np.column_stack([normal_id_to_vector(i) for i in range(6)])
 
 
 def orient_id_to_rotation_matrix(orient_id: int):
     """Returns a flattened 3x3 rotation matrix"""
-    r0 = _NORMAL_VECTORS[orient_id // 6]
-    r1 = _NORMAL_VECTORS[orient_id % 6]
+    r0 = _NORMAL_VECTORS[:, orient_id // 6]
+    r1 = _NORMAL_VECTORS[:, orient_id % 6]
     r2 = np.cross(r0, r1)
     return np.concatenate((r0, r1, r2))
 
 
-def vector_to_normal_id(v: np.ndarray) -> int | None:
-    ids = np.isclose(_NORMAL_VECTORS @ v, 1).nonzero()[0]
-    return ids[0] if ids.size == 1 else None
+def vectors_to_normal_ids(v: np.ndarray) -> list[int | None]:
+    """
+    :param v: a 2d array of vectors to convert to normal ids
+    :return: normal id for each vector
+    """
+    is_units = np.isclose((v * v).sum(1), 1)
+    matchgroups = np.isclose(v @ _NORMAL_VECTORS, 1)
+    idss = (c.nonzero()[0] for c in matchgroups)
+    return [
+        ids[0] if ids.size == 1 and is_unit else None
+        for ids, is_unit in zip(idss, is_units)
+    ]
 
 
-def rotation_matrix_to_orient_id(r: np.ndarray) -> int | None:
-    """Converts a flattened 3x3 matrix to orient id"""
-    xi = vector_to_normal_id(r[0:3])
-    yi = vector_to_normal_id(r[3:6])
-    zi = vector_to_normal_id(r[6:9])
-    if None in (xi, yi, zi) or len({xi % 3, yi % 3, zi % 3}) != 3:
+def _normal_ids_to_orient_id(normal_ids: list[int | None]) -> int | None:
+    if None in normal_ids:
         return None
-    return 6 * xi + yi
+    elif len({id % 3 for id in normal_ids}) != 3:
+        return None
+    else:
+        return 6 * normal_ids[0] + normal_ids[1]
+
+
+def rotation_matrices_to_orient_ids(r: np.ndarray) -> list[int | None]:
+    """
+    :param v: a 2d array of rotation matrices to convert to normal ids.
+        Each row is a flattened 3x3 rotation matrix
+    :return: orient id for each matrix
+    """
+    all_normal_ids = vectors_to_normal_ids(r.reshape(-1, 3))
+    return [
+        _normal_ids_to_orient_id(all_normal_ids[3 * i : 3 * i + 3])
+        for i in range(r.size // 9)
+    ]
 
 
 class CFrame:

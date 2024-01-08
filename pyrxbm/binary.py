@@ -14,7 +14,7 @@ from . import classes
 from .datatypes import (
     orient_id_to_rotation_matrix,
     CFrame,
-    rotation_matrix_to_orient_id,
+    rotation_matrices_to_orient_ids,
 )
 from .tree import Instance
 
@@ -1129,8 +1129,8 @@ class PROP:
             components = np.row_stack([p.GetComponents() for p in props])
             poss = components[:, :3]
             rots = components[:, 3:]
-            for rot in rots:
-                orient_id = rotation_matrix_to_orient_id(rot)
+            orient_ids = rotation_matrices_to_orient_ids(rots)
+            for orient_id, rot in zip(orient_ids, rots):
                 if orient_id is None:
                     stream.write_bytes(b"\0" + np.asarray(rot, stream.F32).tobytes())
                 else:

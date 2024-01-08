@@ -564,7 +564,7 @@ public T FindFirstChildWhichIsA<T>(bool recursive = false) where T : Instance
 }
 """
 
-    def GetFullName(self, separator: str = "\\") -> str:
+    def GetFullName(self, separator: str = ".") -> str:
         """
         :return: a string describing the index traversal of this Instance, starting from its root ancestor.
         """
