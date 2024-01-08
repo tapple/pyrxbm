@@ -1555,40 +1555,16 @@ class PRNT:
             """
             child.Parent = parent
 
-    def serialize(self):
-        """
-        public void Save(BinaryRobloxFileWriter writer)
-        {
-            var file = writer.File;
-            File = file;
+    def serialize(self, stream: BinaryStream, file: BinaryRobloxFile):
+        child_ids = [int(inst.referent) for inst in file.PostInstances]
+        parent_ids = [
+            int(inst.Parent.referent) if inst.Parent is not None else -1
+            for inst in file.PostInstances
+        ]
 
-            var postInstances = writer.PostInstances;
-            var idCount = postInstances.Count;
-
-            var childIds = new List<int>();
-            var parentIds = new List<int>();
-
-            foreach (Instance inst in writer.PostInstances)
-            {
-                Instance parent = inst.Parent;
-
-                int childId = int.Parse(inst.referent);
-                int parentId = -1;
-
-                if (parent != null)
-                    parentId = int.Parse(parent.referent);
-
-                childIds.Add(childId);
-                parentIds.Add(parentId);
-            }
-
-            writer.Write(FORMAT);
-            writer.Write(idCount);
-
-            writer.WriteInstanceIds(childIds);
-            writer.WriteInstanceIds(parentIds);
-        }
-        """
+        stream.pack("<bi", self.FORMAT, len(child_ids))
+        stream.write_instance_ids(child_ids)
+        stream.write_instance_ids(parent_ids)
 
     def write_info(self):
         """
@@ -1907,27 +1883,26 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
             for prop in PROP._collect_properties(inst):
                 self.ChunksImpl.append(self._build_chunk(prop))
 
-        """
-                // Write the PRNT chunk.
-                var parents = new PRNT();
-                writer.SaveChunk(parents);
+        # Write the PRNT chunk.
+        self.ChunksImpl.append(self._build_chunk(PRNT()))
 
-                // Write the SSTR chunk.
-                if (HasSharedStrings)
-                    writer.SaveChunk(SSTR, 0);
+        # Write the SSTR chunk.
+        # if self.HasSharedStrings:
+        #     self.ChunksImpl.insert(self._build_chunk(self.SSTR), 0)
 
-                // Write the META chunk.
-                if (HasMetadata)
-                    writer.SaveChunk(META, 0);
+        # Write the META chunk.
+        # if self.HasMetadata:
+        #     self.ChunksImpl.insert(self._build_chunk(self.META), 0)
 
-                // Write the SIGN chunk.
-                if (HasSignatures)
-                    writer.SaveChunk(SIGN);
+        # Write the SIGN chunk.
+        # if self.HasSignatures:
+        #     self.ChunksImpl.append(self._build_chunk(self.SIGN))
 
-                // Write the END chunk.
-                writer.WriteChunk("END", "</roblox>");
-            }
-        """
+        # Write the END chunk.
+        self.ChunksImpl.append(
+            BinaryRobloxFileChunk.with_data("END\0", b"</roblox>", compress=False)
+        )
+
         stream = BinaryStream(file)
 
         """
