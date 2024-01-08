@@ -20,7 +20,7 @@ def main():
     chunks_read = root.Chunks[:]
     print(root)
     with open(
-        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.pysaved2.rbxm", "wb"
+        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.pysaved.rbxm", "wb"
     ) as file:
         writetime = time.perf_counter()
         root.serialize(file)
@@ -44,6 +44,16 @@ def main():
     assert class_names_read == class_names_written
     # PROP order is different right now
     assert {c.Data for c in chunks_read} == {c.Data for c in chunks_written}
+    root2 = BinaryRobloxFile()
+    with open(
+        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.pysaved.rbxm", "rb"
+    ) as file:
+        root2.deserialize(file)
+    print(root2)
+    with open(
+        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.pysaved2.rbxm", "wb"
+    ) as file:
+        root2.serialize(file)
 
 
 """ lua code

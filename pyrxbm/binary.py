@@ -1613,6 +1613,7 @@ class BinaryRobloxFileChunk:
 
     @classmethod
     def with_data(cls, chunk_type: bytes, data: bytes, compress: bool = True):
+        compress = False  # disable compression
         if len(chunk_type) != 4:
             raise ValueError(
                 f"chunk_type {chunk_type!r} has length {len(chunk_type)}, but should have length 4"
@@ -1821,6 +1822,7 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         self.Classes = sorted(self.ClassMap.values(), key=lambda c: c.ClassName)
         for i, cls in enumerate(self.Classes):
             cls.ClassIndex = i
+        self.NumClasses = len(self.Classes)
 
         # Write the INST chunks.
         for inst in self.Classes:
