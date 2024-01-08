@@ -37,12 +37,13 @@ def main():
         f"CFrames read   : {chunk_data_read[17][:60].hex()} ({len(chunk_data_read[17])}b)"
     )
     print(
-        f"CFrames written: {chunk_data_written[22][:60].hex()} ({len(chunk_data_written[22])}b)"
+        f"CFrames written: {chunk_data_written[23][:60].hex()} ({len(chunk_data_written[23])}b)"
     )
-    print(f"CFrames equal: {chunk_data_read[17] == chunk_data_written[22]}")
+    print(f"CFrames equal: {chunk_data_read[17] == chunk_data_written[23]}")
     assert instances_read == instances_written
     assert class_names_read == class_names_written
-    # assert chunk_data_read[1:4] == chunk_data_written
+    # PROP order is different right now
+    assert set(chunk_data_read) == set(chunk_data_written)
 
 
 """ lua code

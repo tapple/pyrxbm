@@ -154,7 +154,7 @@ class META:
             self.Data[key] = value
         file.META = self
 
-    def serialize(self, stream: BinaryStream):
+    def serialize(self, stream: BinaryStream, file: BinaryRobloxFile):
         stream.pack("<i", len(self.Data))
         for key, value in self.Data.items():
             stream.write_string(key)
@@ -1888,11 +1888,11 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
 
         # Write the SSTR chunk.
         # if self.HasSharedStrings:
-        #     self.ChunksImpl.insert(self._build_chunk(self.SSTR), 0)
+        #     self.ChunksImpl.insert(0, self._build_chunk(self.SSTR))
 
         # Write the META chunk.
-        # if self.HasMetadata:
-        #     self.ChunksImpl.insert(self._build_chunk(self.META), 0)
+        if self.HasMetadata:
+            self.ChunksImpl.insert(0, self._build_chunk(self.META))
 
         # Write the SIGN chunk.
         # if self.HasSignatures:
