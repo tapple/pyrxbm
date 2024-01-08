@@ -8,17 +8,36 @@ Double: TypeAlias = float
 Int64: TypeAlias = int
 
 
-def vector_from_normal_id(normal_id: int) -> np.ndarray:
+def normal_id_to_vector(normal_id: int) -> np.ndarray:
     coords = np.zeros(3, dtype=np.float32)
     coords[normal_id % 3] = -1 if normal_id > 2 else 1
     return coords
 
 
-def rotation_matrix_from_orient_id(orient_id: int):
-    r0 = vector_from_normal_id(orient_id // 6)
-    r1 = vector_from_normal_id(orient_id % 6)
+_NORMAL_VECTORS = np.row_stack([normal_id_to_vector(i) for i in range(6)])
+
+
+def orient_id_to_rotation_matrix(orient_id: int):
+    """Returns a flattened 3x3 rotation matrix"""
+    r0 = _NORMAL_VECTORS[orient_id // 6]
+    r1 = _NORMAL_VECTORS[orient_id % 6]
     r2 = np.cross(r0, r1)
     return np.concatenate((r0, r1, r2))
+
+
+def vector_to_normal_id(v: np.ndarray) -> int | None:
+    ids = np.isclose(_NORMAL_VECTORS @ v, 1).nonzero()[0]
+    return ids[0] if ids.size == 1 else None
+
+
+def rotation_matrix_to_orient_id(r: np.ndarray) -> int | None:
+    """Converts a flattened 3x3 matrix to orient id"""
+    xi = vector_to_normal_id(r[0:3])
+    yi = vector_to_normal_id(r[3:6])
+    zi = vector_to_normal_id(r[6:9])
+    if None in (xi, yi, zi) or len({xi % 3, yi % 3, zi % 3}) != 3:
+        return None
+    return 6 * xi + yi
 
 
 class CFrame:

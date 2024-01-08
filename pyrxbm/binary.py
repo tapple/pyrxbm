@@ -11,7 +11,11 @@ import numpy as np
 import numpy.typing as npt
 
 from . import classes
-from .datatypes import rotation_matrix_from_orient_id, CFrame
+from .datatypes import (
+    orient_id_to_rotation_matrix,
+    CFrame,
+    rotation_matrix_to_orient_id,
+)
 from .tree import Instance
 
 """
@@ -527,7 +531,7 @@ class PROP:
             for i in range(instCount):
                 raw_orient_id = stream.read_bytes(1)[0]
                 if raw_orient_id > 0:
-                    rots[i] = rotation_matrix_from_orient_id(raw_orient_id - 1)
+                    rots[i] = orient_id_to_rotation_matrix(raw_orient_id - 1)
                 else:
                     rots[i] = np.frombuffer(stream.read_bytes(36), stream.F32)
             poss = stream.read_floats(instCount, 3)
@@ -1122,89 +1126,100 @@ class PROP:
                 }
             """
         elif self.Type == PropertyType.CFrame:
+            components = np.row_stack([p.GetComponents() for p in props])
+            poss = components[:, :3]
+            rots = components[:, 3:]
+            for rot in rots:
+                orient_id = rotation_matrix_to_orient_id(rot)
+                if orient_id is None:
+                    stream.write_bytes(b"\0" + np.asarray(rot, stream.F32).tobytes())
+                else:
+                    stream.write_bytes(bytes([orient_id + 1]))
+            stream.write_floats(poss)
             """
-            elif self.Type == PropertyType.Quaternion:
-            elif self.Type == PropertyType.OptionalCFrame:
-                    {
-                        var CFrame_X = new List<float>();
-                        var CFrame_Y = new List<float>();
-                        var CFrame_Z = new List<float>();
+        elif self.Type == PropertyType.CFrame:
+        elif self.Type == PropertyType.Quaternion:
+        elif self.Type == PropertyType.OptionalCFrame:
+                {
+                    var CFrame_X = new List<float>();
+                    var CFrame_Y = new List<float>();
+                    var CFrame_Z = new List<float>();
 
-                        if (Type == PropertyType.OptionalCFrame)
-                            writer.Write((byte)PropertyType.CFrame);
+                    if (Type == PropertyType.OptionalCFrame)
+                        writer.Write((byte)PropertyType.CFrame);
+
+                    props.ForEach(prop =>
+                    {
+                        CFrame value = null;
+
+                        if (prop.Value is Quaternion q)
+                            value = q.ToCFrame();
+                        else
+                            value = prop.CastValue<CFrame>();
+
+                        if (value == null)
+                            value = new CFrame();
+
+                        Vector3 pos = value.Position;
+                        CFrame_X.Add(pos.X);
+                        CFrame_Y.Add(pos.Y);
+                        CFrame_Z.Add(pos.Z);
+
+                        int orientId = value.GetOrientId();
+                        writer.Write((byte)(orientId + 1));
+
+                        if (orientId == -1)
+                        {
+                            if (Type == PropertyType.Quaternion)
+                            {
+                                Quaternion quat = new Quaternion(value);
+                                writer.Write(quat.X);
+                                writer.Write(quat.Y);
+                                writer.Write(quat.Z);
+                                writer.Write(quat.W);
+                            }
+                            else
+                            {
+                                float[] components = value.GetComponents();
+
+                                for (int i = 3; i < 12; i++)
+                                {
+                                    float component = components[i];
+                                    writer.Write(component);
+                                }
+                            }
+                        }
+                    });
+
+                    writer.WriteFloats(CFrame_X);
+                    writer.WriteFloats(CFrame_Y);
+                    writer.WriteFloats(CFrame_Z);
+
+                    if (Type == PropertyType.OptionalCFrame)
+                    {
+                        writer.Write((byte)PropertyType.Bool);
 
                         props.ForEach(prop =>
                         {
-                            CFrame value = null;
-
-                            if (prop.Value is Quaternion q)
-                                value = q.ToCFrame();
-                            else
-                                value = prop.CastValue<CFrame>();
-
-                            if (value == null)
-                                value = new CFrame();
-
-                            Vector3 pos = value.Position;
-                            CFrame_X.Add(pos.X);
-                            CFrame_Y.Add(pos.Y);
-                            CFrame_Z.Add(pos.Z);
-
-                            int orientId = value.GetOrientId();
-                            writer.Write((byte)(orientId + 1));
-
-                            if (orientId == -1)
+                            if (prop.Value is null)
                             {
-                                if (Type == PropertyType.Quaternion)
-                                {
-                                    Quaternion quat = new Quaternion(value);
-                                    writer.Write(quat.X);
-                                    writer.Write(quat.Y);
-                                    writer.Write(quat.Z);
-                                    writer.Write(quat.W);
-                                }
-                                else
-                                {
-                                    float[] components = value.GetComponents();
-
-                                    for (int i = 3; i < 12; i++)
-                                    {
-                                        float component = components[i];
-                                        writer.Write(component);
-                                    }
-                                }
+                                writer.Write(false);
+                                return;
                             }
-                        });
 
-                        writer.WriteFloats(CFrame_X);
-                        writer.WriteFloats(CFrame_Y);
-                        writer.WriteFloats(CFrame_Z);
-
-                        if (Type == PropertyType.OptionalCFrame)
-                        {
-                            writer.Write((byte)PropertyType.Bool);
-
-                            props.ForEach(prop =>
+                            if (prop.Value is Optional<CFrame> optional)
                             {
-                                if (prop.Value is null)
-                                {
-                                    writer.Write(false);
-                                    return;
-                                }
+                                writer.Write(optional.HasValue);
+                                return;
+                            }
 
-                                if (prop.Value is Optional<CFrame> optional)
-                                {
-                                    writer.Write(optional.HasValue);
-                                    return;
-                                }
-
-                                var cf = prop.Value as CFrame;
-                                writer.Write(cf != null);
-                            });
-                        }
-
-                        break;
+                            var cf = prop.Value as CFrame;
+                            writer.Write(cf != null);
+                        });
                     }
+
+                    break;
+                }
             """
         elif self.Type == PropertyType.Enum:
             stream.write_uints(props)
