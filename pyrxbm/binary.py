@@ -61,16 +61,19 @@ class BinaryStream:
     def pack(self, fmt, *data):
         return self.write_bytes(struct.pack(fmt, *data))
 
-    def read_string_undecoded(self):
+    def read_string_undecoded(self) -> bytes:
         (length,) = self.unpack("<I")
         return self.read_bytes(length)
 
-    def read_string(self, encoding="utf8"):
+    def write_string_unencoded(self, s: bytes) -> None:
+        self.pack("<I", len(s))
+        self.write_bytes(s)
+
+    def read_string(self, encoding="utf8") -> str:
         return self.read_string_undecoded().decode(encoding)
 
-    def write_string(self, s):
-        self.pack("<I", len(s))
-        self.write_bytes(s.encode("utf8"))
+    def write_string(self, s: str, encoding="utf8") -> None:
+        self.write_string_unencoded(s.encode(encoding))
 
     # https://blog.roblox.com/2013/05/condense-and-compress-our-custom-binary-file-format/
     def read_interleaved(self, rows: int, dtype: np.dtype, cols=1) -> np.ndarray:
@@ -300,6 +303,7 @@ class PROP:
     Name: str = ""
     ClassIndex: int = -1
     Type: PropertyType = PropertyType.Unknown
+    python_type: str = ""
 
     @property
     def Class(self) -> INST:
@@ -924,6 +928,7 @@ class PROP:
                 Name=field.name,
                 ClassIndex=inst.ClassIndex,
                 Type=PROPERTY_TYPE_MAP[field.type],
+                python_type=field.type,
             )
             for field in fields(inst.Class)
         ]
@@ -938,24 +943,15 @@ class PROP:
         instances = [self.File.Instances[id] for id in ids]
         props = [getattr(instance, self.Name) for instance in instances]
 
+        def write_properties(write: Callable[[Any], None]):
+            for prop in props:
+                write(prop)
+
         if self.Type == PropertyType.String:
-            """
-            props.ForEach(prop =>
-            {
-                byte[] buffer = prop.HasRawBuffer ? prop.RawBuffer : null;
-
-                if (buffer == null)
-                {
-                    string value = prop.CastValue<string>();
-                    buffer = Encoding.UTF8.GetBytes(value);
-                }
-
-                writer.Write(buffer.Length);
-                writer.Write(buffer);
-            });
-
-            break;
-            """
+            if self.python_type == "bytes":
+                write_properties(lambda prop: stream.write_string_unencoded(prop))
+            else:
+                write_properties(lambda prop: stream.write_string(prop))
         elif self.Type == PropertyType.Bool:
             """
             {
