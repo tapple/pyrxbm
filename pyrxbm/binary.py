@@ -1613,7 +1613,6 @@ class BinaryRobloxFileChunk:
 
     @classmethod
     def with_data(cls, chunk_type: bytes, data: bytes, compress: bool = True):
-        compress = False  # disable compression
         if len(chunk_type) != 4:
             raise ValueError(
                 f"chunk_type {chunk_type!r} has length {len(chunk_type)}, but should have length 4"
@@ -1623,7 +1622,7 @@ class BinaryRobloxFileChunk:
         chunk.Data = data
         chunk.Size = len(data)
         if compress:
-            chunk.CompressedData = lz4.block.compress(chunk.Data)
+            chunk.CompressedData = lz4.block.compress(chunk.Data, store_size=False)
             chunk.CompressedSize = len(chunk.CompressedData)
         return chunk
 
