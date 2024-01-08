@@ -17,33 +17,33 @@ def main():
     times = [k.Time for k in keyframes]
     instances_read = root.Instances[:]
     class_names_read = [c.ClassName for c in root.Classes]
-    chunk_data_read = [chunk.Data for chunk in root.Chunks]
+    chunks_read = root.Chunks[:]
     print(root)
     with open(
-        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.pysaved.rbxm", "wb"
+        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.pysaved2.rbxm", "wb"
     ) as file:
         writetime = time.perf_counter()
         root.serialize(file)
         writetime = time.perf_counter() - writetime
     instances_written = root.Instances[:]
     class_names_written = [c.ClassName for c in root.Classes]
-    chunk_data_written = [chunk.Data for chunk in root.Chunks]
+    chunks_written = root.Chunks[:]
     poses = [root.Instances[id] for id in root.ClassMap["Pose"].InstanceIds]
     components = np.row_stack([pose.CFrame.GetComponents() for pose in poses])
     rots = components[:, 3:]
     weirdpose = poses[1200]
     print(f"Read time: {readtime}; Write time: {writetime}")
     print(
-        f"CFrames read   : {chunk_data_read[17][:60].hex()} ({len(chunk_data_read[17])}b)"
+        f"CFrames read   : {chunks_read[17].Data[:60].hex()} ({len(chunks_read[17].Data)}b)"
     )
     print(
-        f"CFrames written: {chunk_data_written[23][:60].hex()} ({len(chunk_data_written[23])}b)"
+        f"CFrames written: {chunks_written[23].Data[:60].hex()} ({len(chunks_written[23].Data)}b)"
     )
-    print(f"CFrames equal: {chunk_data_read[17] == chunk_data_written[23]}")
+    print(f"CFrames equal: {chunks_read[17].Data == chunks_written[23].Data}")
     assert instances_read == instances_written
     assert class_names_read == class_names_written
     # PROP order is different right now
-    assert set(chunk_data_read) == set(chunk_data_written)
+    assert {c.Data for c in chunks_read} == {c.Data for c in chunks_written}
 
 
 """ lua code

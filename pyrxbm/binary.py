@@ -1645,74 +1645,22 @@ class BinaryRobloxFileChunk:
         if self.HasCompressedData:
             self.CompressedData = stream.read_bytes(self.CompressedSize)
             self.Data = lz4.block.decompress(self.CompressedData, self.Size)
-            # print(self.Data)
         else:
             self.Data = stream.read_bytes(self.Size)
 
+    def serialize(self, stream: BinaryStream):
+        stream.pack(
+            "<4siii",
+            self.ChunkType,
+            self.CompressedSize,
+            self.Size,
+            self.Reserved,
+        )
 
-"""
-        public
-        void
-        WriteChunk(BinaryRobloxFileWriter
-        writer)
-        {
-        // Record
-        where
-        we
-        are
-        when
-        we
-        start
-        writing.
-        var
-        stream = writer.BaseStream;
-        long
-        startPos = stream.Position;
-
-        // Write
-        the
-        chunk
-        's data.
-        writer.WriteString(ChunkType, True);
-
-        writer.Write(CompressedSize);
-        writer.Write(Size);
-
-        writer.Write(Reserved);
-
-        if (CompressedSize > 0)
-            writer.Write(CompressedData);
-        else
-            writer.Write(Data);
-
-        // Capture
-        the
-        data
-        we
-        wrote
-        into
-        a
-        byte[]
-        array.
-        long
-        endPos = stream.Position;
-        int
-        length = (int)(endPos - startPos);
-
-        using(MemoryStream
-        buffer = new
-        MemoryStream())
-        {
-            stream.Position = startPos;
-        stream.CopyTo(buffer, length);
-
-        WriteBuffer = buffer.ToArray();
-        HasWriteBuffer = True;
-        }
-        }
-        }
-        }
-"""
+        if self.HasCompressedData:
+            stream.write_bytes(self.CompressedData)
+        else:
+            stream.write_bytes(self.Data)
 
 
 class BinaryRobloxFile(Instance):  # (RobloxFile):
@@ -1774,7 +1722,7 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
     def deserialize(self, file):
         stream = BinaryStream(file)
         # Verify the signature of the file.
-        signature = stream.read_bytes(14)
+        signature = stream.read_bytes(len(self.MAGIC_HEADER))
         if signature != self.MAGIC_HEADER:
             raise ValueError(
                 "Provided file's signature does not match BinaryRobloxFile.MAGIC_HEADER!"
@@ -1900,37 +1848,18 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
 
         # Write the END chunk.
         self.ChunksImpl.append(
-            BinaryRobloxFileChunk.with_data("END\0", b"</roblox>", compress=False)
+            BinaryRobloxFileChunk.with_data(b"END\0", b"</roblox>", compress=False)
         )
 
+        # Write the chunk buffers with the header data
         stream = BinaryStream(file)
-
-        """
-            //////////////////////////////////////////////////////////////////////////
-            // Write the chunk buffers with the header data
-            //////////////////////////////////////////////////////////////////////////
-
-            using (BinaryWriter writer = new BinaryWriter(stream))
-            {
-                stream.Position = 0;
-                stream.SetLength(0);
-
-                writer.Write(MagicHeader
-                    .Select(ch => (byte)ch)
-                    .ToArray());
-
-                writer.Write(Version);
-                writer.Write(NumClasses);
-                writer.Write(NumInstances);
-                writer.Write(Reserved);
-
-                foreach (BinaryRobloxFileChunk chunk in Chunks)
-                {
-                    if (chunk.HasWriteBuffer)
-                    {
-                        byte[] writeBuffer = chunk.WriteBuffer;
-                        writer.Write(writeBuffer);
-                    }
-                }
-            }
-"""
+        stream.write_bytes(self.MAGIC_HEADER)
+        stream.pack(
+            "<HIIq",
+            self.Version,
+            self.NumClasses,
+            self.NumInstances,
+            self.Reserved,
+        )
+        for chunk in self.Chunks:
+            chunk.serialize(stream)
