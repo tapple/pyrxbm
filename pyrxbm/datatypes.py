@@ -25,17 +25,23 @@ def orient_id_to_rotation_matrix(orient_id: int):
     return np.concatenate((r0, r1, r2))
 
 
-def vectors_to_normal_ids(v: np.ndarray) -> list[int | None]:
+def vectors_to_normal_ids(v: np.ndarray, tol: float = 1e-40) -> list[int | None]:
     """
     :param v: a 2d array of vectors to convert to normal ids
+    :param tol: How close to aligned the vector should be to count.
+        Roblox Studio seems to use 1e-30 at most.
+        On my test file, it made a meaningful difference between 1e-5 and 1e-8,
+        and negligible difference outside that range.
+        A good default would be 2e-7, the middle of that range
     :return: normal id for each vector
     """
-    is_units = np.isclose((v * v).sum(1), 1)
-    matchgroups = np.isclose(v @ _NORMAL_VECTORS, 1)
+    zeros = np.isclose(v, 0, rtol=tol, atol=tol)
+    ones = np.isclose(abs(v), 1, rtol=tol, atol=tol)
+    is_01s = np.logical_xor(zeros, ones).all(1)
+    matchgroups = np.isclose(v @ _NORMAL_VECTORS, 1, rtol=tol, atol=tol)
     idss = (c.nonzero()[0] for c in matchgroups)
     return [
-        ids[0] if ids.size == 1 and is_unit else None
-        for ids, is_unit in zip(idss, is_units)
+        ids[0] if ids.size == 1 and is_01 else None for ids, is_01 in zip(idss, is_01s)
     ]
 
 

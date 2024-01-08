@@ -49,6 +49,7 @@ class BinaryStream:
     INT32 = np.dtype(">i4")
     INT64 = np.dtype(">i8")
     F32 = np.dtype(">f4")
+    F32LE = np.dtype("<f4")
 
     def __init__(self, base_stream):
         self.base_stream = base_stream
@@ -527,13 +528,13 @@ class PROP:
             }
             """
         elif self.Type == PropertyType.CFrame:
-            rots = np.zeros((instCount, 9), dtype=stream.F32)
+            rots = np.zeros((instCount, 9), dtype=np.float32)
             for i in range(instCount):
                 raw_orient_id = stream.read_bytes(1)[0]
                 if raw_orient_id > 0:
                     rots[i] = orient_id_to_rotation_matrix(raw_orient_id - 1)
                 else:
-                    rots[i] = np.frombuffer(stream.read_bytes(36), stream.F32)
+                    rots[i] = np.frombuffer(stream.read_bytes(36), stream.F32LE)
             poss = stream.read_floats(instCount, 3)
             read_properties(lambda i: CFrame(*poss[i], *rots[i]))
             """
@@ -1132,7 +1133,7 @@ class PROP:
             orient_ids = rotation_matrices_to_orient_ids(rots)
             for orient_id, rot in zip(orient_ids, rots):
                 if orient_id is None:
-                    stream.write_bytes(b"\0" + np.asarray(rot, stream.F32).tobytes())
+                    stream.write_bytes(b"\0" + np.asarray(rot, stream.F32LE).tobytes())
                 else:
                     stream.write_bytes(bytes([orient_id + 1]))
             stream.write_floats(poss)

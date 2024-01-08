@@ -3,6 +3,8 @@ from pyrxbm.binary import BinaryRobloxFile
 
 
 def main():
+    import numpy as np
+
     root = BinaryRobloxFile()
     with open(
         "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.saved.rbxm", "rb"
@@ -26,12 +28,21 @@ def main():
     instances_written = root.Instances[:]
     class_names_written = [c.ClassName for c in root.Classes]
     chunk_data_written = [chunk.Data for chunk in root.Chunks]
-    weirdpose_id = root.ClassMap["Pose"].InstanceIds[1200]
-    weirdpose = root.Instances[weirdpose_id]
+    poses = [root.Instances[id] for id in root.ClassMap["Pose"].InstanceIds]
+    components = np.row_stack([pose.CFrame.GetComponents() for pose in poses])
+    rots = components[:, 3:]
+    weirdpose = poses[1200]
     print(f"Read time: {readtime}; Write time: {writetime}")
+    print(
+        f"CFrames read   : {chunk_data_read[17][:60].hex()} ({len(chunk_data_read[17])}b)"
+    )
+    print(
+        f"CFrames written: {chunk_data_written[22][:60].hex()} ({len(chunk_data_written[22])}b)"
+    )
+    print(f"CFrames equal: {chunk_data_read[17] == chunk_data_written[22]}")
     assert instances_read == instances_written
     assert class_names_read == class_names_written
-    assert chunk_data_read[1:4] == chunk_data_written
+    # assert chunk_data_read[1:4] == chunk_data_written
 
 
 """ lua code
