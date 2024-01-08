@@ -941,8 +941,8 @@ class PROP:
         self.File = file
         ids = self.Class.InstanceIds
         inst_count = len(ids)
-        instances = (self.File.Instances[id] for id in ids)
-        props = (getattr(instance, self.Name) for instance in instances)
+        instances = [self.File.Instances[id] for id in ids]
+        props = [getattr(instance, self.Name) for instance in instances]
 
         def write_properties(write: Callable[[Any], None]):
             for prop in props:
@@ -954,7 +954,7 @@ class PROP:
             else:
                 write_properties(lambda prop: stream.write_string(prop))
         elif self.Type == PropertyType.Bool:
-            stream.pack(f"{inst_count}?", *list(props))
+            stream.pack(f"{inst_count}?", *props)
             """
         elif self.Type == PropertyType.Int:
                 {
@@ -967,16 +967,7 @@ class PROP:
                 }
             """
         elif self.Type == PropertyType.Float:
-            """
-            {
-                var floats = props
-                    .Select(prop => prop.CastValue<float>())
-                    .ToList();
-
-                writer.WriteFloats(floats);
-                break;
-            }
-            """
+            stream.write_floats(props)
             """
         elif self.Type == PropertyType.Double:
                 {
