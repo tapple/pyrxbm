@@ -1,17 +1,18 @@
 from __future__ import annotations
 
-from typing import Callable, Any
+from typing import Callable, Any, BinaryIO
+from enum import Enum
 
 import lz4.block
 import struct
 from io import BytesIO
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 import numpy as np
 import numpy.typing as npt
 
 from . import classes
 from .datatypes import rotation_matrix_from_orient_id, CFrame
-from .tree import PropertyType, Instance
+from .tree import Instance
 
 """
 using RobloxFiles.Enums;
@@ -166,6 +167,15 @@ class INST:
         self.NumInstances = 0
         self.InstanceIds = []
 
+    @property
+    def Class(self):
+        try:
+            return getattr(classes, self.ClassName)
+        except AttributeError:
+            raise ValueError(
+                f"INST - Unknown class: {self.ClassName} while reading INST chunk."
+            )
+
     def __str__(self):
         return f"{self.ClassIndex}: {self.ClassName}x{self.NumInstances}"
 
@@ -175,13 +185,7 @@ class INST:
         self.is_service, self.NumInstances = stream.unpack("<?i")
         self.InstanceIds = stream.read_instance_ids(self.NumInstances)
         file.Classes[self.ClassIndex] = self
-
-        try:
-            instType = getattr(classes, self.ClassName)
-        except AttributeError:
-            raise ValueError(
-                f"INST - Unknown class: {self.ClassName} while reading INST chunk."
-            )
+        instType = self.Class
 
         if self.is_service:
             self.RootedServices = stream.unpack(f"{self.NumInstances}?")
@@ -215,6 +219,79 @@ class INST:
 
         print(f"- NumInstances: {self.NumInstances}")
         print(f"- InstanceIds: `{', '.join(self.InstanceIds)}`")
+
+
+# fmt: off
+class PropertyType(Enum):
+    Unknown            =  0
+    String             =  1
+    Bool               =  2
+    Int                =  3
+    Float              =  4
+    Double             =  5
+    UDim               =  6
+    UDim2              =  7
+    Ray                =  8
+    Faces              =  9
+    Axes               = 10
+    BrickColor         = 11
+    Color3             = 12
+    Vector2            = 13
+    Vector3            = 14
+
+    CFrame             = 16
+    Quaternion         = 17
+    Enum               = 18
+    Ref                = 19
+    Vector3int16       = 20
+    NumberSequence     = 21
+    ColorSequence      = 22
+    NumberRange        = 23
+    Rect               = 24
+    PhysicalProperties = 25
+    Color3uint8        = 26
+    Int64              = 27
+    SharedString       = 28
+    ProtectedString    = 29
+    OptionalCFrame     = 30
+    UniqueId           = 31
+    FontFace           = 32
+
+PROPERTY_TYPE_MAP = {
+    "str"               : PropertyType.String, "bytes": PropertyType.String,
+    "bool"              : PropertyType.Bool              ,
+    "int"               : PropertyType.Int               ,
+    "float"             : PropertyType.Float             ,
+    "Double"            : PropertyType.Double            ,
+    "UDim"              : PropertyType.UDim              ,
+    "UDim2"             : PropertyType.UDim2             ,
+    "Ray"               : PropertyType.Ray               ,
+    "Faces"             : PropertyType.Faces             ,
+    "Axes"              : PropertyType.Axes              ,
+    "BrickColor"        : PropertyType.BrickColor        ,
+    "Color3"            : PropertyType.Color3            ,
+    "Vector2"           : PropertyType.Vector2           ,
+    "Vector3"           : PropertyType.Vector3           ,
+
+    "CFrame"            : PropertyType.CFrame            ,
+    "Quaternion"        : PropertyType.Quaternion        ,
+    "Enum"              : PropertyType.Enum              ,
+    "Ref"               : PropertyType.Ref               ,
+    "Vector3int16"      : PropertyType.Vector3int16      ,
+    "NumberSequence"    : PropertyType.NumberSequence    ,
+    "ColorSequence"     : PropertyType.ColorSequence     ,
+    "NumberRange"       : PropertyType.NumberRange       ,
+    "Rect"              : PropertyType.Rect              ,
+    "PhysicalProperties": PropertyType.PhysicalProperties,
+    "Color3uint8"       : PropertyType.Color3uint8       ,
+    "Int64"             : PropertyType.Int64             ,
+    "SharedString"      : PropertyType.SharedString      ,
+    "ProtectedString"   : PropertyType.ProtectedString   ,
+    "OptionalCFrame"    : PropertyType.OptionalCFrame    ,
+    "UniqueId"          : PropertyType.UniqueId          ,
+    "FontFace"          : PropertyType.FontFace          ,
+}
+# fmt: on
 
 
 @dataclass
@@ -840,103 +917,59 @@ class PROP:
                 f"Unhandled property type: {self.Type} in {self}!"
             )
 
-    def _collect_properties(self):
-        """
-        internal static Dictionary<string, PROP> CollectProperties(BinaryRobloxFileWriter writer, INST inst)
-        {
-            BinaryRobloxFile file = writer.File;
-            var propMap = new Dictionary<string, PROP>();
+    @classmethod
+    def _collect_properties(self, inst: INST) -> list[PROP]:
+        return [
+            PROP(
+                Name=field.name,
+                ClassIndex=inst.ClassIndex,
+                Type=PROPERTY_TYPE_MAP[field.type],
+            )
+            for field in fields(inst.Class)
+        ]
 
-            foreach (int instId in inst.InstanceIds)
+    def serialize(self, stream: BinaryStream, file: BinaryRobloxFile):
+        stream.pack("<i", self.ClassIndex)
+        stream.write_string(self.Name)
+        stream.pack("<b", self.Type.value)
+
+        self.File = file
+        ids = self.Class.InstanceIds
+        instances = [self.File.Instances[id] for id in ids]
+        props = [getattr(instance, self.Name) for instance in instances]
+
+        if self.Type == PropertyType.String:
+            """
+            props.ForEach(prop =>
             {
-                Instance instance = file.Instances[instId];
-                var props = instance.RefreshProperties();
+                byte[] buffer = prop.HasRawBuffer ? prop.RawBuffer : null;
 
-                foreach (string propName in props.Keys)
+                if (buffer == null)
                 {
-                    if (propName == "Archivable")
-                        continue;
-
-                    if (propName.Contains("__"))
-                        continue;
-
-                    if (!propMap.ContainsKey(propName))
-                    {
-                        Property prop = props[propName];
-
-                        PROP propChunk = new PROP()
-                        {
-                            Name = prop.Name,
-                            Type = prop.Type,
-
-                            File = writer.File,
-                            ClassIndex = inst.ClassIndex
-                        };
-
-                        propMap.Add(propName, propChunk);
-                    }
+                    string value = prop.CastValue<string>();
+                    buffer = Encoding.UTF8.GetBytes(value);
                 }
-            }
 
-            return propMap;
-        }"""
+                writer.Write(buffer.Length);
+                writer.Write(buffer);
+            });
 
-    def serialize(self):
-        """
-        public void Save(BinaryRobloxFileWriter writer)
-        {
-            BinaryRobloxFile file = writer.File;
-            File = file;
-
-            INST inst = file.Classes[ClassIndex];
-            var props = new List<Property>();
-
-            foreach (int instId in inst.InstanceIds)
+            break;
+            """
+        elif self.Type == PropertyType.Bool:
+            """
             {
-                Instance instance = file.Instances[instId];
-                var instProps = instance.Properties;
-
-                if (!instProps.TryGetValue(Name, out Property prop))
-                    throw new Exception($"Property {Name} must be defined in {instance.GetFullName()}!");
-                else if (prop.Type != Type)
-                    throw new Exception($"Property {Name} is not using the correct type in {instance.GetFullName()}!");
-
-                props.Add(prop);
-            }
-
-            writer.Write(ClassIndex);
-            writer.WriteString(Name);
-            writer.Write(TypeId);
-
-            switch (Type)
-            {
-            if self.Type == PropertyType.String:
-                    props.ForEach(prop =>
-                    {
-                        byte[] buffer = prop.HasRawBuffer ? prop.RawBuffer : null;
-
-                        if (buffer == null)
-                        {
-                            string value = prop.CastValue<string>();
-                            buffer = Encoding.UTF8.GetBytes(value);
-                        }
-
-                        writer.Write(buffer.Length);
-                        writer.Write(buffer);
-                    });
-
-                    break;
-            elif self.Type == PropertyType.Bool:
+                props.ForEach(prop =>
                 {
-                    props.ForEach(prop =>
-                    {
-                        bool value = prop.CastValue<bool>();
-                        writer.Write(value);
-                    });
+                    bool value = prop.CastValue<bool>();
+                    writer.Write(value);
+                });
 
-                    break;
-                }
-            elif self.Type == PropertyType.Int:
+                break;
+            }
+            """
+            """
+        elif self.Type == PropertyType.Int:
                 {
                     var ints = props
                         .Select(prop => prop.CastValue<int>())
@@ -945,16 +978,20 @@ class PROP:
                     writer.WriteInts(ints);
                     break;
                 }
-            elif self.Type == PropertyType.Float:
-                {
-                    var floats = props
-                        .Select(prop => prop.CastValue<float>())
-                        .ToList();
+            """
+        elif self.Type == PropertyType.Float:
+            """
+            {
+                var floats = props
+                    .Select(prop => prop.CastValue<float>())
+                    .ToList();
 
-                    writer.WriteFloats(floats);
-                    break;
-                }
-            elif self.Type == PropertyType.Double:
+                writer.WriteFloats(floats);
+                break;
+            }
+            """
+            """
+        elif self.Type == PropertyType.Double:
                 {
                     props.ForEach(prop =>
                     {
@@ -964,7 +1001,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.UDim:
+        elif self.Type == PropertyType.UDim:
                 {
                     var UDim_Scales = new List<float>();
                     var UDim_Offsets = new List<int>();
@@ -981,7 +1018,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.UDim2:
+        elif self.Type == PropertyType.UDim2:
                 {
                     var UDim2_Scales_X = new List<float>();
                     var UDim2_Scales_Y = new List<float>();
@@ -1008,7 +1045,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.Ray:
+        elif self.Type == PropertyType.Ray:
                 {
                     props.ForEach(prop =>
                     {
@@ -1027,8 +1064,8 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.Faces:
-            elif self.Type == PropertyType.Axes:
+        elif self.Type == PropertyType.Faces:
+        elif self.Type == PropertyType.Axes:
                 {
                     props.ForEach(prop =>
                     {
@@ -1038,7 +1075,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.BrickColor:
+        elif self.Type == PropertyType.BrickColor:
                 {
                     var brickColorIds = props
                         .Select(prop => prop.CastValue<BrickColor>())
@@ -1048,7 +1085,7 @@ class PROP:
                     writer.WriteInts(brickColorIds);
                     break;
                 }
-            elif self.Type == PropertyType.Color3:
+        elif self.Type == PropertyType.Color3:
                 {
                     var Color3_R = new List<float>();
                     var Color3_G = new List<float>();
@@ -1068,7 +1105,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.Vector2:
+        elif self.Type == PropertyType.Vector2:
                 {
                     var Vector2_X = new List<float>();
                     var Vector2_Y = new List<float>();
@@ -1085,7 +1122,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.Vector3:
+        elif self.Type == PropertyType.Vector3:
                 {
                     var Vector3_X = new List<float>();
                     var Vector3_Y = new List<float>();
@@ -1105,111 +1142,117 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.CFrame:
+            """
+        elif self.Type == PropertyType.CFrame:
+            """
             elif self.Type == PropertyType.Quaternion:
             elif self.Type == PropertyType.OptionalCFrame:
-                {
-                    var CFrame_X = new List<float>();
-                    var CFrame_Y = new List<float>();
-                    var CFrame_Z = new List<float>();
-
-                    if (Type == PropertyType.OptionalCFrame)
-                        writer.Write((byte)PropertyType.CFrame);
-
-                    props.ForEach(prop =>
                     {
-                        CFrame value = null;
+                        var CFrame_X = new List<float>();
+                        var CFrame_Y = new List<float>();
+                        var CFrame_Z = new List<float>();
 
-                        if (prop.Value is Quaternion q)
-                            value = q.ToCFrame();
-                        else
-                            value = prop.CastValue<CFrame>();
-
-                        if (value == null)
-                            value = new CFrame();
-
-                        Vector3 pos = value.Position;
-                        CFrame_X.Add(pos.X);
-                        CFrame_Y.Add(pos.Y);
-                        CFrame_Z.Add(pos.Z);
-
-                        int orientId = value.GetOrientId();
-                        writer.Write((byte)(orientId + 1));
-
-                        if (orientId == -1)
-                        {
-                            if (Type == PropertyType.Quaternion)
-                            {
-                                Quaternion quat = new Quaternion(value);
-                                writer.Write(quat.X);
-                                writer.Write(quat.Y);
-                                writer.Write(quat.Z);
-                                writer.Write(quat.W);
-                            }
-                            else
-                            {
-                                float[] components = value.GetComponents();
-
-                                for (int i = 3; i < 12; i++)
-                                {
-                                    float component = components[i];
-                                    writer.Write(component);
-                                }
-                            }
-                        }
-                    });
-
-                    writer.WriteFloats(CFrame_X);
-                    writer.WriteFloats(CFrame_Y);
-                    writer.WriteFloats(CFrame_Z);
-
-                    if (Type == PropertyType.OptionalCFrame)
-                    {
-                        writer.Write((byte)PropertyType.Bool);
+                        if (Type == PropertyType.OptionalCFrame)
+                            writer.Write((byte)PropertyType.CFrame);
 
                         props.ForEach(prop =>
                         {
-                            if (prop.Value is null)
-                            {
-                                writer.Write(false);
-                                return;
-                            }
+                            CFrame value = null;
 
-                            if (prop.Value is Optional<CFrame> optional)
-                            {
-                                writer.Write(optional.HasValue);
-                                return;
-                            }
+                            if (prop.Value is Quaternion q)
+                                value = q.ToCFrame();
+                            else
+                                value = prop.CastValue<CFrame>();
 
-                            var cf = prop.Value as CFrame;
-                            writer.Write(cf != null);
+                            if (value == null)
+                                value = new CFrame();
+
+                            Vector3 pos = value.Position;
+                            CFrame_X.Add(pos.X);
+                            CFrame_Y.Add(pos.Y);
+                            CFrame_Z.Add(pos.Z);
+
+                            int orientId = value.GetOrientId();
+                            writer.Write((byte)(orientId + 1));
+
+                            if (orientId == -1)
+                            {
+                                if (Type == PropertyType.Quaternion)
+                                {
+                                    Quaternion quat = new Quaternion(value);
+                                    writer.Write(quat.X);
+                                    writer.Write(quat.Y);
+                                    writer.Write(quat.Z);
+                                    writer.Write(quat.W);
+                                }
+                                else
+                                {
+                                    float[] components = value.GetComponents();
+
+                                    for (int i = 3; i < 12; i++)
+                                    {
+                                        float component = components[i];
+                                        writer.Write(component);
+                                    }
+                                }
+                            }
                         });
-                    }
 
-                    break;
-                }
-            elif self.Type == PropertyType.Enum:
-                {
-                    var enums = new List<uint>();
+                        writer.WriteFloats(CFrame_X);
+                        writer.WriteFloats(CFrame_Y);
+                        writer.WriteFloats(CFrame_Z);
 
-                    props.ForEach(prop =>
-                    {
-                        if (prop.Value is uint raw)
+                        if (Type == PropertyType.OptionalCFrame)
                         {
-                            enums.Add(raw);
-                            return;
+                            writer.Write((byte)PropertyType.Bool);
+
+                            props.ForEach(prop =>
+                            {
+                                if (prop.Value is null)
+                                {
+                                    writer.Write(false);
+                                    return;
+                                }
+
+                                if (prop.Value is Optional<CFrame> optional)
+                                {
+                                    writer.Write(optional.HasValue);
+                                    return;
+                                }
+
+                                var cf = prop.Value as CFrame;
+                                writer.Write(cf != null);
+                            });
                         }
 
-                        int signed = (int)prop.Value;
-                        uint value = (uint)signed;
+                        break;
+                    }
+            """
+        elif self.Type == PropertyType.Enum:
+            """
+            {
+                var enums = new List<uint>();
 
-                        enums.Add(value);
-                    });
+                props.ForEach(prop =>
+                {
+                    if (prop.Value is uint raw)
+                    {
+                        enums.Add(raw);
+                        return;
+                    }
 
-                    writer.WriteInterleaved(enums);
-                    break;
-                }
-            elif self.Type == PropertyType.Ref:
+                    int signed = (int)prop.Value;
+                    uint value = (uint)signed;
+
+                    enums.Add(value);
+                });
+
+                writer.WriteInterleaved(enums);
+                break;
+            }
+            """
+            """
+        elif self.Type == PropertyType.Ref:
                 {
                     var InstanceIds = new List<int>();
 
@@ -1234,7 +1277,7 @@ class PROP:
                     writer.WriteInstanceIds(InstanceIds);
                     break;
                 }
-            elif self.Type == PropertyType.Vector3int16:
+        elif self.Type == PropertyType.Vector3int16:
                 {
                     props.ForEach(prop =>
                     {
@@ -1246,7 +1289,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.NumberSequence:
+        elif self.Type == PropertyType.NumberSequence:
                 {
                     props.ForEach(prop =>
                     {
@@ -1265,7 +1308,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.ColorSequence:
+        elif self.Type == PropertyType.ColorSequence:
                 {
                     props.ForEach(prop =>
                     {
@@ -1289,7 +1332,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.NumberRange:
+        elif self.Type == PropertyType.NumberRange:
                 {
                     props.ForEach(prop =>
                     {
@@ -1300,7 +1343,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.Rect:
+        elif self.Type == PropertyType.Rect:
                 {
                     var Rect_X0 = new List<float>();
                     var Rect_Y0 = new List<float>();
@@ -1329,7 +1372,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.PhysicalProperties:
+        elif self.Type == PropertyType.PhysicalProperties:
                 {
                     props.ForEach(prop =>
                     {
@@ -1351,7 +1394,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.Color3uint8:
+        elif self.Type == PropertyType.Color3uint8:
                 {
                     var Color3uint8_R = new List<byte>();
                     var Color3uint8_G = new List<byte>();
@@ -1376,25 +1419,29 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.Int64:
+            """
+        elif self.Type == PropertyType.Int64:
+            """
+            {
+                var longs = new List<long>();
+
+                props.ForEach(prop =>
                 {
-                    var longs = new List<long>();
+                    long value = prop.CastValue<long>();
+                    longs.Add(value);
+                });
 
-                    props.ForEach(prop =>
-                    {
-                        long value = prop.CastValue<long>();
-                        longs.Add(value);
-                    });
+                writer.WriteInterleaved(longs, value =>
+                {
+                    // Move the sign bit to the front.
+                    return (value << 1) ^ (value >> 63);
+                });
 
-                    writer.WriteInterleaved(longs, value =>
-                    {
-                        // Move the sign bit to the front.
-                        return (value << 1) ^ (value >> 63);
-                    });
-
-                    break;
-                }
-            elif self.Type == PropertyType.SharedString:
+                break;
+            }
+            """
+            """
+        elif self.Type == PropertyType.SharedString:
                 {
                     var sharedKeys = new List<uint>();
                     SSTR sstr = file.SSTR;
@@ -1431,7 +1478,7 @@ class PROP:
                     writer.WriteInterleaved(sharedKeys);
                     break;
                 }
-            elif self.Type == PropertyType.ProtectedString:
+        elif self.Type == PropertyType.ProtectedString:
                 {
                     props.ForEach(prop =>
                     {
@@ -1444,7 +1491,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.UniqueId:
+        elif self.Type == PropertyType.UniqueId:
                 {
                     props.ForEach(prop =>
                     {
@@ -1456,7 +1503,7 @@ class PROP:
 
                     break;
                 }
-            elif self.Type == PropertyType.FontFace:
+        elif self.Type == PropertyType.FontFace:
                 {
                     props.ForEach(prop =>
                     {
@@ -1477,13 +1524,11 @@ class PROP:
 
                     break;
                 }
-                default:
-                {
-                    RobloxFile.LogError($"Unhandled property type: {Type} in {this}!");
-                    break;
-                }
-            }
-        }"""
+            """
+        else:
+            raise NotImplementedError(
+                f"Unhandled property type: {self.Type} in {self}!"
+            )
 
     def write_info(self):
         """
@@ -1902,19 +1947,12 @@ class BinaryRobloxFile(Instance):  # (RobloxFile):
         for inst in self.Classes:
             self.ChunksImpl.append(self._build_chunk(inst))
 
+        # Write the PROP chunks.
+        for inst in self.Classes:
+            for prop in PROP._collect_properties(inst):
+                self.ChunksImpl.append(self._build_chunk(prop))
+
         """
-                // Write the PROP chunks.
-                foreach (INST inst in Classes)
-                {
-                    var props = PROP.CollectProperties(writer, inst);
-
-                    foreach (string propName in props.Keys)
-                    {
-                        PROP prop = props[propName];
-                        writer.SaveChunk(prop);
-                    }
-                }
-
                 // Write the PRNT chunk.
                 var parents = new PRNT();
                 writer.SaveChunk(parents);

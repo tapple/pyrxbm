@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import numpy as np
 
+Enum: TypeAlias = int
+Double: TypeAlias = float
+Int64: TypeAlias = int
+
 
 def vector_from_normal_id(normal_id: int) -> np.ndarray:
     coords = np.zeros(3, dtype=np.float32)
