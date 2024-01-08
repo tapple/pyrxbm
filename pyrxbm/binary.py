@@ -1207,28 +1207,7 @@ class PROP:
                     }
             """
         elif self.Type == PropertyType.Enum:
-            """
-            {
-                var enums = new List<uint>();
-
-                props.ForEach(prop =>
-                {
-                    if (prop.Value is uint raw)
-                    {
-                        enums.Add(raw);
-                        return;
-                    }
-
-                    int signed = (int)prop.Value;
-                    uint value = (uint)signed;
-
-                    enums.Add(value);
-                });
-
-                writer.WriteInterleaved(enums);
-                break;
-            }
-            """
+            stream.write_uints(props)
             """
         elif self.Type == PropertyType.Ref:
                 {
