@@ -7,6 +7,7 @@ Very incomplete. Currently only supports the bare minimum to read/write Keyframe
 Progress
 - XML support: not started/planned
 - Chunk types: 4/6 (Missing SSTR and SIGN)
+- Chunk compression schemes: 1/3 (just LZMA)
 - PropertyTypes: 6/31
 - DataTypes: 1/40 (just CFrame)
 - Classes: 5/hundreds (Roblox-File-Format has a Roblox Studio Plugin to periodically sync this with the Lua library. Porting that has not started)
