@@ -40,6 +40,13 @@ def main():
     #     f"CFrames written: {chunks_written[23].Data[:60].hex()} ({len(chunks_written[23].Data)}b)"
     # )
     # print(f"CFrames equal: {chunks_read[17].Data == chunks_written[23].Data}")
+    # It looks like Pose CFrames are not orthonormalized on export. cool
+    # mPelvisCFrames = np.row_stack(
+    #     [
+    #         keyframe.Children[0].Children[0].Children[0].CFrame.GetComponents()
+    #         for keyframe in keyframes
+    #     ]
+    # ).round()
     assert instances_read == instances_written
     assert class_names_read == class_names_written
     # PROP order is different right now
