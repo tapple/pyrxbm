@@ -46,6 +46,7 @@ def encode_int64(i: np.ndarray) -> np.ndarray:
 # http://stackoverflow.com/questions/442188/readint-readbyte-readstring-etc-in-python
 class BinaryStream:
     UINT32 = np.dtype(">u4")
+    UINT64 = np.dtype(">u8")
     INT32 = np.dtype(">i4")
     INT64 = np.dtype(">i8")
     F32 = np.dtype(">f4")
@@ -106,6 +107,14 @@ class BinaryStream:
 
     def write_ints(self, values):
         self.write_interleaved(encode_int(np.asarray(values, np.int32)), self.INT32)
+
+    def read_ulongs(self, rows, cols=1):
+        # no negative encoding
+        return self.read_interleaved(rows, self.UINT64, cols)
+
+    def write_ulongs(self, values):
+        # no negative encoding
+        self.write_interleaved(values, self.UINT64)
 
     def read_longs(self, rows, cols=1):
         return decode_int(self.read_interleaved(rows, self.INT64, cols))
@@ -369,7 +378,8 @@ class PROP:
                     setattr(instance, self.Name, read(i))
 
         if self.Type == PropertyType.String:
-            if self.Name in ("Tags", "AttributesSerialize"):
+            # FIXME: check the dataclass field type instead
+            if self.Name in ("Tags", "AttributesSerialize", "GuidBinaryString"):
                 read_properties(lambda i: stream.read_string_undecoded())
             else:
                 read_properties(lambda i: stream.read_string())
@@ -924,13 +934,8 @@ class PROP:
             }
             """
         elif self.Type == PropertyType.SecurityCapabilities:
-            """
-            {
-                var capabilities = reader.ReadInterleaved(instCount, BitConverter.ToUInt64);
-                readProperties(i => capabilities[i]);
-                break;
-            }
-            """
+            longs = stream.read_ulongs(instCount)
+            read_properties(lambda i: longs[i])
         else:
             raise NotImplementedError(
                 f"Unhandled property type: {self.Type} in {self}!"
@@ -1491,21 +1496,8 @@ class PROP:
                 }
             """
         elif self.Type == PropertyType.SecurityCapabilities:
-            """
-            {
-                // FIXME: Verify this is correct once we know what SecurityCapabilities actually does.
-                var capabilities = new List<ulong>();
-
-                props.ForEach(prop =>
-                {
-                    var value = prop.CastValue<ulong>();
-                    capabilities.Add(value);
-                });
-
-                writer.WriteInterleaved(capabilities);
-                break;
-            }
-            """
+            # FIXME: Verify this is correct once we know what SecurityCapabilities actually does.
+            stream.write_ulongs(props)
         else:
             raise NotImplementedError(
                 f"Unhandled property type: {self.Type} in {self}!"

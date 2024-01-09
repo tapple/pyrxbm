@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .datatypes import UniqueId, Int64
+from .datatypes import UniqueId, Int64, SecurityCapabilities
 
 
 @dataclass
@@ -16,6 +16,10 @@ class Instance:
     Name: str = ""
     """ The source AssetId this instance was created in. """
     SourceAssetId: Int64 = field(default=-1, repr=False)
+    """ Whether the instance defines security capabilities. """
+    DefinesCapabilities: bool = field(default=False, repr=False)
+    """ The SecurityCapabilities of this instance. """
+    Capabilities: SecurityCapabilities = field(default=0, repr=False)
     """ A hashset of CollectionService tags assigned to this Instance. """
     Tags: bytes = field(default=b"", repr=False)
     """ The public readonly access point of the attributes on this Instance. """

@@ -11,6 +11,7 @@ from .datatypes import CFrame, Enum
 
 @dataclass
 class AnimationClip(Instance):
+    GuidBinaryString: bytes = b""
     Loop: bool = True
     Priority: Enum = 2
 

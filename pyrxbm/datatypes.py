@@ -6,6 +6,7 @@ import numpy as np
 Enum: TypeAlias = int
 Double: TypeAlias = float
 Int64: TypeAlias = int
+SecurityCapabilities: TypeAlias = int
 
 
 def normal_id_to_vector(normal_id: int) -> np.ndarray:

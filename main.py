@@ -31,15 +31,15 @@ def main():
     poses = [root.Instances[id] for id in root.ClassMap["Pose"].InstanceIds]
     components = np.row_stack([pose.CFrame.GetComponents() for pose in poses])
     rots = components[:, 3:]
-    weirdpose = poses[1200]
-    print(f"Read time: {readtime}; Write time: {writetime}")
-    print(
-        f"CFrames read   : {chunks_read[17].Data[:60].hex()} ({len(chunks_read[17].Data)}b)"
-    )
-    print(
-        f"CFrames written: {chunks_written[23].Data[:60].hex()} ({len(chunks_written[23].Data)}b)"
-    )
-    print(f"CFrames equal: {chunks_read[17].Data == chunks_written[23].Data}")
+    # weirdpose = poses[1200]
+    # print(f"Read time: {readtime}; Write time: {writetime}")
+    # print(
+    #     f"CFrames read   : {chunks_read[17].Data[:60].hex()} ({len(chunks_read[17].Data)}b)"
+    # )
+    # print(
+    #     f"CFrames written: {chunks_written[23].Data[:60].hex()} ({len(chunks_written[23].Data)}b)"
+    # )
+    # print(f"CFrames equal: {chunks_read[17].Data == chunks_written[23].Data}")
     assert instances_read == instances_written
     assert class_names_read == class_names_written
     # PROP order is different right now
