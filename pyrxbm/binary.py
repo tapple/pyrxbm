@@ -231,73 +231,75 @@ class INST:
 
 # fmt: off
 class PropertyType(Enum):
-    Unknown            =  0
-    String             =  1
-    Bool               =  2
-    Int                =  3
-    Float              =  4
-    Double             =  5
-    UDim               =  6
-    UDim2              =  7
-    Ray                =  8
-    Faces              =  9
-    Axes               = 10
-    BrickColor         = 11
-    Color3             = 12
-    Vector2            = 13
-    Vector3            = 14
+    Unknown              =  0
+    String               =  1
+    Bool                 =  2
+    Int                  =  3
+    Float                =  4
+    Double               =  5
+    UDim                 =  6
+    UDim2                =  7
+    Ray                  =  8
+    Faces                =  9
+    Axes                 = 10
+    BrickColor           = 11
+    Color3               = 12
+    Vector2              = 13
+    Vector3              = 14
 
-    CFrame             = 16
-    Quaternion         = 17
-    Enum               = 18
-    Ref                = 19
-    Vector3int16       = 20
-    NumberSequence     = 21
-    ColorSequence      = 22
-    NumberRange        = 23
-    Rect               = 24
-    PhysicalProperties = 25
-    Color3uint8        = 26
-    Int64              = 27
-    SharedString       = 28
-    ProtectedString    = 29
-    OptionalCFrame     = 30
-    UniqueId           = 31
-    FontFace           = 32
+    CFrame               = 16
+    Quaternion           = 17
+    Enum                 = 18
+    Ref                  = 19
+    Vector3int16         = 20
+    NumberSequence       = 21
+    ColorSequence        = 22
+    NumberRange          = 23
+    Rect                 = 24
+    PhysicalProperties   = 25
+    Color3uint8          = 26
+    Int64                = 27
+    SharedString         = 28
+    ProtectedString      = 29
+    OptionalCFrame       = 30
+    UniqueId             = 31
+    FontFace             = 32
+    SecurityCapabilities = 33
 
 PROPERTY_TYPE_MAP = {
-    "str"               : PropertyType.String, "bytes": PropertyType.String,
-    "bool"              : PropertyType.Bool              ,
-    "int"               : PropertyType.Int               ,
-    "float"             : PropertyType.Float             ,
-    "Double"            : PropertyType.Double            ,
-    "UDim"              : PropertyType.UDim              ,
-    "UDim2"             : PropertyType.UDim2             ,
-    "Ray"               : PropertyType.Ray               ,
-    "Faces"             : PropertyType.Faces             ,
-    "Axes"              : PropertyType.Axes              ,
-    "BrickColor"        : PropertyType.BrickColor        ,
-    "Color3"            : PropertyType.Color3            ,
-    "Vector2"           : PropertyType.Vector2           ,
-    "Vector3"           : PropertyType.Vector3           ,
+    "str": PropertyType.String,  "bytes": PropertyType.String,
+    "bool"                : PropertyType.Bool                ,
+    "int"                 : PropertyType.Int                 ,
+    "float"               : PropertyType.Float               ,
+    "Double"              : PropertyType.Double              ,
+    "UDim"                : PropertyType.UDim                ,
+    "UDim2"               : PropertyType.UDim2               ,
+    "Ray"                 : PropertyType.Ray                 ,
+    "Faces"               : PropertyType.Faces               ,
+    "Axes"                : PropertyType.Axes                ,
+    "BrickColor"          : PropertyType.BrickColor          ,
+    "Color3"              : PropertyType.Color3              ,
+    "Vector2"             : PropertyType.Vector2             ,
+    "Vector3"             : PropertyType.Vector3             ,
 
-    "CFrame"            : PropertyType.CFrame            ,
-    "Quaternion"        : PropertyType.Quaternion        ,
-    "Enum"              : PropertyType.Enum              ,
-    "Ref"               : PropertyType.Ref               ,
-    "Vector3int16"      : PropertyType.Vector3int16      ,
-    "NumberSequence"    : PropertyType.NumberSequence    ,
-    "ColorSequence"     : PropertyType.ColorSequence     ,
-    "NumberRange"       : PropertyType.NumberRange       ,
-    "Rect"              : PropertyType.Rect              ,
-    "PhysicalProperties": PropertyType.PhysicalProperties,
-    "Color3uint8"       : PropertyType.Color3uint8       ,
-    "Int64"             : PropertyType.Int64             ,
-    "SharedString"      : PropertyType.SharedString      ,
-    "ProtectedString"   : PropertyType.ProtectedString   ,
-    "OptionalCFrame"    : PropertyType.OptionalCFrame    ,
-    "UniqueId"          : PropertyType.UniqueId          ,
-    "FontFace"          : PropertyType.FontFace          ,
+    "CFrame"              : PropertyType.CFrame              ,
+    "Quaternion"          : PropertyType.Quaternion          ,
+    "Enum"                : PropertyType.Enum                ,
+    "Ref"                 : PropertyType.Ref                 ,
+    "Vector3int16"        : PropertyType.Vector3int16        ,
+    "NumberSequence"      : PropertyType.NumberSequence      ,
+    "ColorSequence"       : PropertyType.ColorSequence       ,
+    "NumberRange"         : PropertyType.NumberRange         ,
+    "Rect"                : PropertyType.Rect                ,
+    "PhysicalProperties"  : PropertyType.PhysicalProperties  ,
+    "Color3uint8"         : PropertyType.Color3uint8         ,
+    "Int64"               : PropertyType.Int64               ,
+    "SharedString"        : PropertyType.SharedString        ,
+    "ProtectedString"     : PropertyType.ProtectedString     ,
+    "OptionalCFrame"      : PropertyType.OptionalCFrame      ,
+    "UniqueId"            : PropertyType.UniqueId            ,
+    "FontFace"            : PropertyType.FontFace            ,
+    "SecurityCapabilities": PropertyType.SecurityCapabilities,
 }
 # fmt: on
 
@@ -921,6 +923,14 @@ class PROP:
                 break;
             }
             """
+        elif self.Type == PropertyType.SecurityCapabilities:
+            """
+            {
+                var capabilities = reader.ReadInterleaved(instCount, BitConverter.ToUInt64);
+                readProperties(i => capabilities[i]);
+                break;
+            }
+            """
         else:
             raise NotImplementedError(
                 f"Unhandled property type: {self.Type} in {self}!"
@@ -1479,6 +1489,22 @@ class PROP:
 
                     break;
                 }
+            """
+        elif self.Type == PropertyType.SecurityCapabilities:
+            """
+            {
+                // FIXME: Verify this is correct once we know what SecurityCapabilities actually does.
+                var capabilities = new List<ulong>();
+
+                props.ForEach(prop =>
+                {
+                    var value = prop.CastValue<ulong>();
+                    capabilities.Add(value);
+                });
+
+                writer.WriteInterleaved(capabilities);
+                break;
+            }
             """
         else:
             raise NotImplementedError(

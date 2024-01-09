@@ -7,7 +7,7 @@ def main():
 
     root = BinaryRobloxFile()
     with open(
-        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TH_lay1.saved.rbxm", "rb"
+        "E:\\Nextcloud\\blender\\quad\\bc\\roblox\\TestScaleAnim.rbxm", "rb"
     ) as file:
         readtime = time.perf_counter()
         root.deserialize(file)
