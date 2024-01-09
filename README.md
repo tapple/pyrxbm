@@ -1,6 +1,6 @@
 # pyrxbm
 
-Ported to Python from https://github.com/MaximumADHD/Roblox-File-Format
+A Python library to create and manipulate Roblox model/place files. Ported to Python from https://github.com/MaximumADHD/Roblox-File-Format
 
 Very incomplete. Currently only supports the bare minimum to read/write KeyframeSequence assets. Contributions welcome
 
