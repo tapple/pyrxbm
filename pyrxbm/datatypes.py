@@ -106,6 +106,9 @@ CFrame.Identity = CFrame()
 
 @dataclass
 class UniqueId:
-    Time: int
-    Index: int
-    Random: int
+    random: int
+    time: int
+    index: int
+
+    def __str__(self):
+        return f"{self.random:016x}{self.time:08x}{self.index:08x}"

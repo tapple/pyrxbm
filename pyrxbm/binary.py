@@ -15,6 +15,7 @@ from .datatypes import (
     orient_id_to_rotation_matrix,
     CFrame,
     rotation_matrices_to_orient_ids,
+    UniqueId,
 )
 from .tree import Instance
 
@@ -51,6 +52,7 @@ class BinaryStream:
     INT64 = np.dtype(">i8")
     F32 = np.dtype(">f4")
     F32LE = np.dtype("<f4")
+    UniqueId = np.dtype([("index", ">u4"), ("time", ">u4"), ("random", ">i8")])
 
     def __init__(self, base_stream):
         self.base_stream = base_stream
@@ -903,18 +905,18 @@ class PROP:
 
                 break;
             }
+            """
         elif self.Type == PropertyType.UniqueId:
-            {
-                read_properties(i =>
-                {
-                    var index = reader.ReadUInt32();
-                    var time = reader.ReadUInt32();
-                    var random = reader.ReadUInt64();
-                    return new UniqueId(index, time, random);
-                });
-
-                break;
-            }
+            data = stream.read_interleaved(instCount, stream.UniqueId)
+            randoms = decode_int(data["random"])
+            read_properties(
+                lambda i: UniqueId(
+                    random=randoms[i],
+                    time=data[i]["time"],
+                    index=data[i]["index"],
+                )
+            )
+            """
         elif self.Type == PropertyType.FontFace:
             {
                 read_properties(i =>
@@ -1461,18 +1463,14 @@ class PROP:
 
                     break;
                 }
+            """
         elif self.Type == PropertyType.UniqueId:
-                {
-                    props.ForEach(prop =>
-                    {
-                        var uniqueId = prop.CastValue<UniqueId>();
-                        writer.Write(uniqueId.Index);
-                        writer.Write(uniqueId.Time);
-                        writer.Write(uniqueId.Random);
-                    });
-
-                    break;
-                }
+            data = np.asarray(
+                [(p.index, p.time, p.random) for p in props], dtype=stream.UniqueId
+            )
+            data["random"] = encode_int64(data["random"])
+            stream.write_interleaved(data)
+            """
         elif self.Type == PropertyType.FontFace:
                 {
                     props.ForEach(prop =>

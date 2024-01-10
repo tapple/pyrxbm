@@ -20,6 +20,10 @@ class Instance:
     DefinesCapabilities: bool = field(default=False, repr=False)
     """ The SecurityCapabilities of this instance. """
     Capabilities: SecurityCapabilities = field(default=0, repr=False)
+    """ A unique identifier declared for the history of this instance. """
+    HistoryId: UniqueId = field(default=UniqueId(0, 0, 0), repr=False)
+    """ A unique identifier declared for this instance. """
+    UniqueId: UniqueId = field(default=UniqueId(0, 0, 0), repr=False)
     """ A hashset of CollectionService tags assigned to this Instance. """
     Tags: bytes = field(default=b"", repr=False)
     """ The public readonly access point of the attributes on this Instance. """
@@ -34,8 +38,6 @@ class Instance:
         self._children: list[Instance] = []
         """ The raw unsafe value of the Instance's parent. """
         self._parent: Instance = None
-        """ A unique identifier declared for this instance. """
-        self.UniqueId: UniqueId = None
         """ A context-dependent unique identifier for this instance when being serialized. """
         self.referent: str = None
         """ Indicates whether the parent of this object is locked. """
